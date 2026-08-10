@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+{% block title %}入庫清單{% endblock %}
+
+{% block content %}
+<div class="workspace-header">
+    <h1 class="page-title">入庫清單</h1>
+    <span class="spacer"></span>
+    <a class="btn btn-sm btn-outline-dark" id="exportLink" href="#" hidden>匯出 CSV</a>
+</div>
+
+<div class="workspace workspace--three">
+    <section class="panel panel--navy">
+        <header class="panel__header">疾病分組</header>
+        <div class="panel__body" id="diseaseList">
+            <div class="empty-state">載入中…</div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <header class="panel__header d-flex justify-content-between align-items-center">
+            <span>病患清單</span>
+            <span class="record-list__meta" id="patientCount">0 位</span>
+        </header>
+        <div class="panel__body" id="patientList">
+            <div class="empty-state">請先選擇疾病分組</div>
+        </div>
+    </section>
+
+    <section class="panel panel--cream">
+        <header class="panel__header" id="studyHeader">檢查紀錄</header>
+        <div class="panel__body" id="studyList">
+            <div class="empty-state">選擇病患後顯示檢查紀錄</div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+    const { getJSON, postJSON, el, clear, showEmpty } = window.App;
+
+    const urls = {
+        diseases: "{% url 'research:disease_list' %}",
+        patients: "{% url 'research:warehousing_patients' %}",
+        studies: "{% url 'research:patient_studies' %}",
+        exportBase: "{% url 'research:export_csv' %}",
+    };
+
+    const diseaseListEl = document.getElementById('diseaseList');
+    const patientListEl = document.getElementById('patientList');
+    const patientCountEl = document.getElementById('patientCount');
+    const studyListEl = document.getElementById('studyList');
+    const studyHeaderEl = document.getElementById('studyHeader');
+    const exportLink = document.getElementById('exportLink');
+
+    let selectedDiseaseId = null;
+
+    async function loadDiseases() {
+        try {
+            const data = await getJSON(urls.diseases);
+            clear(diseaseListEl);
+            const list = el('ul', 'record-list');
+            data.diseases.forEach((disease) => {
+                const li = el('li');
+                const button = el('button', 'record-list__item');
+                button.type = 'button';
+                button.appendChild(el('span', null, disease.name));
+                button.appendChild(el('span', 'record-list__meta', `${disease.total} 位`));
+                button.addEventListener('click', () => selectDisease(disease, button));
+                li.appendChild(button);
+                list.appendChild(li);
+            });
+            diseaseListEl.appendChild(list);
+        } catch (err) {
+            showEmpty(diseaseListEl, `載入失敗：${err.message}`);
+        }
+    }
+
+    async function selectDisease(disease, button) {
+        selectedDiseaseId = disease.id;
+        diseaseListEl.querySelectorAll('.record-list__item')
+            .forEach((node) => node.classList.remove('is-active'));
+        button.classList.add('is-active');
+
+        exportLink.hidden = false;
+        exportLink.href = `${urls.exportBase}?disease_id=${encodeURIComponent(disease.id)}`;
+
+        patientListEl.classList.add('is-busy');
+        try {
+            const data = await postJSON(urls.patients, { disease_id: disease.id });
+            patientCountEl.textContent = `${data.total} 位`;
+            clear(patientListEl);
+            if (!data.patients.length) {
+                showEmpty(patientListEl, '此分組沒有病患');
+                return;
+            }
+            const list = el('ul', 'record-list');
+            data.patients.forEach((patient) => {
+                const li = el('li');
+                const button = el('button', 'record-list__item');
+                button.type = 'button';
+                button.appendChild(el('span', null, `${patient.chart_no} ${patient.name}`));
+                button.appendChild(el('span', 'record-list__meta',
+                    `${patient.study_count} 筆檢查`));
+                button.addEventListener('click', () => selectPatient(patient, button));
+                li.appendChild(button);
+                list.appendChild(li);
+            });
+            patientListEl.appendChild(list);
+        } catch (err) {
+            showEmpty(patientListEl, `載入失敗：${err.message}`);
+        } finally {
+            patientListEl.classList.remove('is-busy');
+        }
+    }
+
+    async function selectPatient(patient, button) {
+        patientListEl.querySelectorAll('.record-list__item')
+            .forEach((node) => node.classList.remove('is-active'));
+        button.classList.add('is-active');
+        studyHeaderEl.textContent = `檢查紀錄 — ${patient.chart_no} ${patient.name}`;
+
+        try {
+            const data = await postJSON(urls.studies, { chart_no: patient.chart_no });
+            clear(studyListEl);
+            if (!data.studies.length) {
+                showEmpty(studyListEl, '此病患沒有檢查紀錄');
+                return;
+            }
+            const wrap = el('div', 'table-scroll');
+            const table = el('table', 'data-table');
+            const thead = el('thead');
+            const headRow = el('tr');
+            ['日期', '項目', '檢查編號', '序列', '說明', '張數', '院區']
+                .forEach((label) => headRow.appendChild(el('th', null, label)));
+            thead.appendChild(headRow);
+            table.appendChild(thead);
+
+            const tbody = el('tbody');
+            data.studies.forEach((study) => {
+                const tr = el('tr');
+                [study.exec_date, study.type_name, study.study_id, study.series_id,
+                 study.description, study.slice_count, study.hospital]
+                    .forEach((value) => tr.appendChild(el('td', null, value || '—')));
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            wrap.appendChild(table);
+            studyListEl.appendChild(wrap);
+        } catch (err) {
+            showEmpty(studyListEl, `載入失敗：${err.message}`);
+        }
+    }
+
+    loadDiseases();
+})();
+</script>
+{% endblock %}

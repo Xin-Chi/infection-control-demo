@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+{% comment %}
+One template serves both tube screens.  The original shipped two apps whose
+only difference was a hard-coded category number.
+{% endcomment %}
+{% include '_readonly_notice.html' %}
+
+<div class="workspace-header">
+    <h1 class="page-title">{{ title }}</h1>
+    <span class="text-muted small">將原始導管名稱對應到標準名稱</span>
+    <span class="spacer"></span>
+    <input type="search" class="form-control form-control-sm" id="tubeSearch"
+           placeholder="搜尋導管名稱" style="max-width: 16rem;" aria-label="搜尋導管名稱">
+</div>
+
+<div class="workspace workspace--sidebar">
+    <section class="panel panel--navy">
+        <header class="panel__header">標準名稱</header>
+        <div class="panel__body" id="canonicalList">
+            <div class="empty-state">載入中…</div>
+        </div>
+    </section>
+
+    <section class="panel panel--framed">
+        <div class="panel__body">
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>編號</th>
+                            <th>原始名稱</th>
+                            <th>使用次數</th>
+                            <th>對應標準名稱</th>
+                        </tr>
+                    </thead>
+                    <tbody id="variantRows">
+                        <tr><td colspan="4" class="text-center text-muted">載入中…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+    const { getJSON, postJSON, el, clear, showEmpty } = window.App;
+
+    const urls = {
+        data: "{% url 'infection:tube_data' variant %}",
+        map: "{% url 'infection:tube_map' variant %}",
+    };
+
+    const canonicalListEl = document.getElementById('canonicalList');
+    const variantRowsEl = document.getElementById('variantRows');
+    const tubeSearch = document.getElementById('tubeSearch');
+
+    let canonical = [];
+    let variants = [];
+
+    function renderCanonical() {
+        clear(canonicalListEl);
+        const list = el('ul', 'record-list');
+        canonical.forEach((tube) => {
+            const li = el('li');
+            const item = el('div', 'record-list__item');
+            item.style.cursor = 'default';
+            item.appendChild(el('span', null, tube.name));
+            item.appendChild(el('span', 'record-list__meta', `#${tube.tube_no}`));
+            li.appendChild(item);
+            list.appendChild(li);
+        });
+        canonicalListEl.appendChild(list);
+    }
+
+    function renderVariants() {
+        const keyword = tubeSearch.value.trim().toLowerCase();
+        const rows = keyword
+            ? variants.filter((tube) => tube.name.toLowerCase().includes(keyword))
+            : variants;
+
+        clear(variantRowsEl);
+        if (!rows.length) {
+            const tr = el('tr');
+            const td = el('td', 'text-center text-muted', '沒有符合的資料');
+            td.colSpan = 4;
+            tr.appendChild(td);
+            variantRowsEl.appendChild(tr);
+            return;
+        }
+
+        rows.forEach((tube) => {
+            const tr = el('tr');
+            tr.appendChild(el('td', null, tube.tube_no));
+            tr.appendChild(el('td', null, tube.name));
+            tr.appendChild(el('td', null, tube.usage_count));
+
+            const cell = el('td');
+            const select = el('select', 'form-select form-select-sm');
+            select.style.minWidth = '15rem';
+            const blank = el('option', null, '— 尚未對應 —');
+            blank.value = '';
+            select.appendChild(blank);
+            canonical.forEach((target) => {
+                const option = el('option', null, target.name);
+                option.value = target.tube_no;
+                if (tube.canonical_no === target.tube_no) { option.selected = true; }
+                select.appendChild(option);
+            });
+
+            if (window.DEMO_MODE) {
+                select.disabled = true;
+                select.classList.add('is-readonly');
+                select.title = '示範站為唯讀模式';
+            }
+
+            select.addEventListener('change', async () => {
+                select.disabled = true;
+                try {
+                    const result = await postJSON(urls.map, {
+                        tube_no: tube.tube_no,
+                        canonical_no: select.value,
+                    });
+                    tube.canonical_no = result.canonical_no;
+                } catch (err) {
+                    alert(`儲存失敗：${err.message}`);
+                } finally {
+                    select.disabled = false;
+                }
+            });
+
+            cell.appendChild(select);
+            tr.appendChild(cell);
+            variantRowsEl.appendChild(tr);
+        });
+    }
+
+    async function load() {
+        try {
+            const data = await getJSON(urls.data);
+            canonical = data.canonical;
+            variants = data.variants;
+            renderCanonical();
+            renderVariants();
+        } catch (err) {
+            showEmpty(canonicalListEl, `載入失敗：${err.message}`);
+        }
+    }
+
+    tubeSearch.addEventListener('input', renderVariants);
+    load();
+})();
+</script>
+{% endblock %}

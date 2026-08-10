@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% block title %}研究主題{% endblock %}
+
+{% block content %}
+<div class="workspace-header">
+    <h1 class="page-title">研究主題</h1>
+    <span class="spacer"></span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="篩選">
+        <button type="button" class="btn btn-dark" data-filter="all">全部</button>
+        <button type="button" class="btn btn-outline-dark" data-filter="pending">未確認</button>
+        <button type="button" class="btn btn-outline-dark" data-filter="reviewed">已確認</button>
+    </div>
+</div>
+
+<div class="workspace workspace--two">
+    <section class="panel panel--navy">
+        <header class="panel__header">主題清單</header>
+        <div class="panel__body" id="topicList">
+            <div class="empty-state">載入中…</div>
+        </div>
+    </section>
+
+    <section class="panel panel--framed">
+        <div class="panel__body">
+            <div class="stat-row mb-3" id="statRow" hidden>
+                <div class="stat">
+                    <div class="stat__label">收案總數</div>
+                    <div class="stat__value" id="statTotal">0</div>
+                </div>
+                <div class="stat">
+                    <div class="stat__label">已確認</div>
+                    <div class="stat__value" id="statReviewed">0</div>
+                </div>
+                <div class="stat">
+                    <div class="stat__label">未確認</div>
+                    <div class="stat__value" id="statPending">0</div>
+                </div>
+            </div>
+            <div id="patientList">
+                <div class="empty-state">請先選擇研究主題</div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+    const { getJSON, postJSON, el, clear, showEmpty } = window.App;
+
+    const urls = {
+        topics: "{% url 'research:topic_list' %}",
+        patients: "{% url 'research:topic_patients' %}",
+    };
+
+    const topicListEl = document.getElementById('topicList');
+    const patientListEl = document.getElementById('patientList');
+    const statRow = document.getElementById('statRow');
+
+    let selectedTopicId = null;
+    let filter = 'all';
+
+    async function loadTopics() {
+        try {
+            const data = await getJSON(urls.topics);
+            clear(topicListEl);
+            if (!data.topics.length) {
+                showEmpty(topicListEl, '沒有可存取的研究主題');
+                return;
+            }
+            const list = el('ul', 'record-list');
+            data.topics.forEach((topic) => {
+                const li = el('li');
+                const button = el('button', 'record-list__item');
+                button.type = 'button';
+                button.style.flexDirection = 'column';
+                button.style.alignItems = 'flex-start';
+                button.appendChild(el('span', null, topic.name));
+                button.appendChild(el('span', 'record-list__meta', topic.description));
+                button.addEventListener('click', () => selectTopic(topic.id, button));
+                li.appendChild(button);
+                list.appendChild(li);
+            });
+            topicListEl.appendChild(list);
+        } catch (err) {
+            showEmpty(topicListEl, `載入失敗：${err.message}`);
+        }
+    }
+
+    async function selectTopic(topicId, button) {
+        selectedTopicId = topicId;
+        if (button) {
+            topicListEl.querySelectorAll('.record-list__item')
+                .forEach((node) => node.classList.remove('is-active'));
+            button.classList.add('is-active');
+        }
+        await loadPatients();
+    }
+
+    async function loadPatients() {
+        if (!selectedTopicId) { return; }
+        patientListEl.classList.add('is-busy');
+        try {
+            const data = await postJSON(urls.patients, {
+                topic_id: selectedTopicId, filter,
+            });
+
+            statRow.hidden = false;
+            document.getElementById('statTotal').textContent = data.total;
+            document.getElementById('statReviewed').textContent = data.reviewed;
+            document.getElementById('statPending').textContent = data.pending;
+
+            clear(patientListEl);
+            if (!data.patients.length) {
+                showEmpty(patientListEl, '沒有符合條件的病患');
+                return;
+            }
+            const wrap = el('div', 'table-scroll');
+            const table = el('table', 'data-table');
+            const thead = el('thead');
+            const headRow = el('tr');
+            ['病歷號', '姓名', '性別', '病房', '狀態']
+                .forEach((label) => headRow.appendChild(el('th', null, label)));
+            thead.appendChild(headRow);
+            table.appendChild(thead);
+
+            const tbody = el('tbody');
+            data.patients.forEach((patient) => {
+                const tr = el('tr');
+                [patient.chart_no, patient.name, patient.gender, patient.ward || '—']
+                    .forEach((value) => tr.appendChild(el('td', null, value)));
+                const status = el('td');
+                const badge = el('span',
+                    patient.reviewed ? 'badge bg-success' : 'badge bg-secondary',
+                    patient.reviewed ? '已確認' : '未確認');
+                status.appendChild(badge);
+                tr.appendChild(status);
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            wrap.appendChild(table);
+            patientListEl.appendChild(wrap);
+        } catch (err) {
+            showEmpty(patientListEl, `載入失敗：${err.message}`);
+        } finally {
+            patientListEl.classList.remove('is-busy');
+        }
+    }
+
+    document.querySelectorAll('[data-filter]').forEach((button) => {
+        button.addEventListener('click', () => {
+            filter = button.dataset.filter;
+            document.querySelectorAll('[data-filter]').forEach((node) => {
+                node.className = node === button
+                    ? 'btn btn-dark' : 'btn btn-outline-dark';
+            });
+            loadPatients();
+        });
+    });
+
+    loadTopics();
+})();
+</script>
+{% endblock %}

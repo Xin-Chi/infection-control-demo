@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}感染管控收案系統{% endblock %}
+
+{% block content %}
+<div class="panel panel--framed" style="flex: 0 0 auto;">
+    <div class="panel__body">
+        <div class="container-fluid text-center py-4">
+            <h1 class="display-5 fw-bold">感染管控收案系統</h1>
+            <p class="lead mb-1">臨床資料檢閱與收案標註</p>
+            <p class="text-muted mb-0">
+                示範版本 — 站內所有病患、病房、檢驗與報告資料皆為虛構，僅供介面展示使用。
+            </p>
+        </div>
+    </div>
+</div>
+
+{% if demo_mode %}
+<div class="row g-3 mt-0">
+    <div class="col-12 col-lg-7">
+        <div class="panel h-100">
+            <div class="panel__header">感染管控 — 病患查詢</div>
+            <div class="panel__body">
+                <p class="small mb-2">
+                    以時間軸檢視病患的住院、護理紀錄、導管留置與異常生理評值，
+                    並依病房、科別、菌種與日期區間篩選收案對象。
+                    點選時間軸上的事件可展開該筆的微生物培養報告（含抗生素敏感性測試）
+                    或護理紀錄原文。
+                </p>
+                <a class="btn btn-dark" href="{% url 'infection:search' %}">開始瀏覽</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+        <div class="panel h-100">
+            <div class="panel__header">關於這個示範站</div>
+            <div class="panel__body small">
+                <ul class="mb-0 ps-3">
+                    <li>站內<strong>所有</strong>病患、病房、菌種、報告資料皆為程式產生的虛構資料。</li>
+                    <li>不連線任何醫院資料庫，也不含任何真實病歷。</li>
+                    <li>為保持資料完整，示範站為<strong>唯讀</strong>，不開放修改。</li>
+                    <li>完整版另有字詞歸類、管路對應、研究收案與權限管理等功能，
+                        原始碼中皆已實作。</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="row g-3 mt-0">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="panel h-100">
+            <div class="panel__header">感染管控</div>
+            <div class="panel__body">
+                <p class="small mb-2">
+                    以時間軸檢視病患的住院、護理紀錄、導管留置與異常生理評值，
+                    並依病房、科別、菌種與日期區間篩選收案對象。
+                </p>
+                {% if 'infection' in nav_sections %}
+                <a class="btn btn-sm btn-dark" href="{% url 'infection:search' %}">前往查詢</a>
+                {% else %}
+                <span class="badge bg-secondary">需要權限</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="panel h-100">
+            <div class="panel__header">字詞歸類</div>
+            <div class="panel__body">
+                <p class="small mb-2">
+                    將報告文字中擷取出的字詞逐一確認或捨棄，
+                    再歸入整理後的感染分類詞庫，建立可重複使用的對照表。
+                </p>
+                {% if 'infection' in nav_sections %}
+                <a class="btn btn-sm btn-dark" href="{% url 'infection:categorize' %}">前往歸類</a>
+                {% else %}
+                <span class="badge bg-secondary">需要權限</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="panel h-100">
+            <div class="panel__header">癌症研究收案</div>
+            <div class="panel__body">
+                <p class="small mb-2">
+                    依疾病分組整理入庫清單與檢查紀錄，
+                    支援匯出 CSV，方便後續統計與研究分析。
+                </p>
+                {% if 'research' in nav_sections %}
+                <a class="btn btn-sm btn-dark" href="{% url 'research:warehousing' %}">前往清單</a>
+                {% else %}
+                <span class="badge bg-secondary">需要權限</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="panel h-100">
+            <div class="panel__header">階段確認</div>
+            <div class="panel__body">
+                <p class="small mb-2">
+                    由審閱者為每位收案病患標記所處的疾病階段，
+                    各審閱者的判讀彼此獨立，避免互相影響。
+                </p>
+                {% if 'research' in nav_sections %}
+                <a class="btn btn-sm btn-dark" href="{% url 'research:stage_confirm' %}">前往確認</a>
+                {% else %}
+                <span class="badge bg-secondary">需要權限</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if not user.is_authenticated %}
+<div class="panel mt-3" style="flex: 0 0 auto;">
+    <div class="panel__body text-center">
+        <p class="mb-2">請先登入以使用各項功能。</p>
+        <a class="btn btn-dark" href="{% url 'accounts:login' %}">登入</a>
+        <a class="btn btn-outline-dark" href="{% url 'accounts:register' %}">註冊</a>
+    </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

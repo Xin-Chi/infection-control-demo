@@ -1,0 +1,224 @@
+{% extends 'base.html' %}
+{% block title %}確認病患階段{% endblock %}
+
+{% block content %}
+{% include '_readonly_notice.html' %}
+
+<div class="workspace-header">
+    <h1 class="page-title">確認病患階段</h1>
+    <div class="filter-field" style="max-width: 18rem;">
+        <select id="topicSelect" class="form-select form-select-sm" aria-label="研究主題">
+            <option value="">選擇研究主題…</option>
+        </select>
+    </div>
+    <span class="spacer"></span>
+    <span class="text-muted small">每位審閱者僅能看到並修改自己的判讀</span>
+</div>
+
+<div class="workspace workspace--three">
+    <section class="panel panel--navy">
+        <header class="panel__header d-flex justify-content-between align-items-center">
+            <span>收案病患</span>
+            <span class="record-list__meta" id="patientCount">0 位</span>
+        </header>
+        <div class="panel__body" id="patientList">
+            <div class="empty-state">請先選擇研究主題</div>
+        </div>
+    </section>
+
+    <section class="panel panel--framed">
+        <div class="panel__body" id="stagePanel">
+            <div class="empty-state">選擇病患後可標記階段</div>
+        </div>
+    </section>
+
+    <section class="panel panel--cream">
+        <header class="panel__header">已確認紀錄</header>
+        <div class="panel__body" id="historyPanel">
+            <div class="empty-state">尚無紀錄</div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+    const { getJSON, postJSON, el, clear, showEmpty } = window.App;
+
+    const urls = {
+        topics: "{% url 'research:topic_list' %}",
+        patients: "{% url 'research:topic_patients' %}",
+        definitions: "{% url 'research:stage_definitions' %}",
+        patientStage: "{% url 'research:patient_stage' %}",
+        save: "{% url 'research:save_stage' %}",
+    };
+
+    const topicSelect = document.getElementById('topicSelect');
+    const patientListEl = document.getElementById('patientList');
+    const patientCountEl = document.getElementById('patientCount');
+    const stagePanelEl = document.getElementById('stagePanel');
+    const historyPanelEl = document.getElementById('historyPanel');
+
+    let stages = [];
+    let selectedPatient = null;
+
+    async function loadTopics() {
+        const data = await getJSON(urls.topics);
+        data.topics.forEach((topic) => {
+            const option = el('option', null, topic.name);
+            option.value = topic.id;
+            topicSelect.appendChild(option);
+        });
+    }
+
+    async function loadPatients() {
+        const topicId = topicSelect.value;
+        if (!topicId) { return; }
+        try {
+            const [patientData, definitionData] = await Promise.all([
+                postJSON(urls.patients, { topic_id: topicId, filter: 'all' }),
+                postJSON(urls.definitions, { topic_id: topicId }),
+            ]);
+            stages = definitionData.stages;
+
+            patientCountEl.textContent = `${patientData.total} 位`;
+            clear(patientListEl);
+            if (!patientData.patients.length) {
+                showEmpty(patientListEl, '此主題沒有收案病患');
+                return;
+            }
+            const list = el('ul', 'record-list');
+            patientData.patients.forEach((patient) => {
+                const li = el('li');
+                const button = el('button', 'record-list__item');
+                button.type = 'button';
+                button.appendChild(el('span', null, `${patient.chart_no} ${patient.name}`));
+                button.appendChild(el('span',
+                    patient.reviewed ? 'badge bg-success' : 'record-list__meta',
+                    patient.reviewed ? '已確認' : '未確認'));
+                button.addEventListener('click', () => selectPatient(patient, button));
+                li.appendChild(button);
+                list.appendChild(li);
+            });
+            patientListEl.appendChild(list);
+        } catch (err) {
+            showEmpty(patientListEl, `載入失敗：${err.message}`);
+        }
+    }
+
+    async function selectPatient(patient, button) {
+        selectedPatient = patient;
+        patientListEl.querySelectorAll('.record-list__item')
+            .forEach((node) => node.classList.remove('is-active'));
+        button.classList.add('is-active');
+        await renderStagePanel();
+    }
+
+    async function renderStagePanel() {
+        if (!selectedPatient) { return; }
+        const data = await postJSON(urls.patientStage, {
+            topic_id: topicSelect.value,
+            chart_no: selectedPatient.chart_no,
+        });
+        const mine = data.confirmations.find((c) => c.is_mine);
+
+        clear(stagePanelEl);
+        stagePanelEl.appendChild(el('h2', 'page-title mb-3',
+            `${selectedPatient.chart_no} ${selectedPatient.name}`));
+
+        const group = el('div', 'd-flex flex-column gap-2 mb-3');
+        stages.forEach((stage) => {
+            const label = el('label', 'record-list__item');
+            const radio = el('input');
+            radio.type = 'radio';
+            radio.name = 'stage';
+            radio.value = stage.id;
+            radio.className = 'form-check-input m-0 me-2';
+            if (mine && mine.stage_id === stage.id) { radio.checked = true; }
+            label.appendChild(radio);
+            label.appendChild(el('span', null, stage.name));
+            group.appendChild(label);
+        });
+        stagePanelEl.appendChild(group);
+
+        const note = el('textarea', 'form-control form-control-sm mb-2');
+        note.id = 'stageNote';
+        note.rows = 3;
+        note.placeholder = '備註（選填）';
+        note.value = mine ? mine.note : '';
+        stagePanelEl.appendChild(note);
+
+        const actions = el('div', 'filter-actions');
+        const save = el('button', 'btn btn-sm btn-dark', '儲存');
+        save.type = 'button';
+        save.addEventListener('click', saveStage);
+        const clearBtn = el('button', 'btn btn-sm btn-outline-secondary', '清除我的判讀');
+        clearBtn.type = 'button';
+        clearBtn.addEventListener('click', () => saveStage(true));
+        actions.appendChild(save);
+        actions.appendChild(clearBtn);
+        stagePanelEl.appendChild(actions);
+
+        if (window.DEMO_MODE) {
+            [save, clearBtn, note].forEach((node) => {
+                node.disabled = true;
+                node.classList.add('is-readonly');
+                node.title = '示範站為唯讀模式';
+            });
+            group.querySelectorAll('input[name=stage]').forEach((radio) => {
+                radio.disabled = true;
+            });
+            group.classList.add('is-readonly');
+        }
+
+        renderHistory(data.confirmations);
+    }
+
+    function renderHistory(confirmations) {
+        clear(historyPanelEl);
+        if (!confirmations.length) {
+            showEmpty(historyPanelEl, '尚無紀錄');
+            return;
+        }
+        const list = el('div', 'd-flex flex-column gap-2');
+        confirmations.forEach((c) => {
+            const block = el('div', 'report-block');
+            block.appendChild(el('div', 'report-block__meta',
+                `${c.reviewer}${c.is_mine ? '（我）' : ''} · ${c.confirmed_at}`));
+            block.appendChild(el('div', 'fw-semibold', c.stage_name));
+            if (c.note) { block.appendChild(el('div', 'small', c.note)); }
+            list.appendChild(block);
+        });
+        historyPanelEl.appendChild(list);
+    }
+
+    async function saveStage(clearIt) {
+        const checked = stagePanelEl.querySelector('input[name=stage]:checked');
+        const noteEl = document.getElementById('stageNote');
+        try {
+            await postJSON(urls.save, {
+                topic_id: topicSelect.value,
+                chart_no: selectedPatient.chart_no,
+                stage_id: clearIt === true ? '' : (checked ? checked.value : ''),
+                note: noteEl ? noteEl.value : '',
+            });
+            await renderStagePanel();
+            await loadPatients();
+        } catch (err) {
+            alert(`儲存失敗：${err.message}`);
+        }
+    }
+
+    topicSelect.addEventListener('change', () => {
+        selectedPatient = null;
+        clear(stagePanelEl);
+        showEmpty(stagePanelEl, '選擇病患後可標記階段');
+        loadPatients();
+    });
+
+    loadTopics();
+})();
+</script>
+{% endblock %}

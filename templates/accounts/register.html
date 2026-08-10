@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}註冊{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-center align-items-start" style="flex: 1 1 auto;">
+    <div class="panel" style="flex: 0 1 30rem; max-width: 100%; margin-top: 2rem;">
+        <div class="panel__header">建立帳號</div>
+        <div class="panel__body">
+            <form method="post" novalidate>
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger py-2 small">
+                    {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+
+                {% for field in form %}
+                <div class="mb-3">
+                    <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}
+                    <div class="form-text small">{{ field.help_text|safe }}</div>
+                    {% endif %}
+                    {% for error in field.errors %}
+                    <div class="text-danger small mt-1">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <div class="alert alert-info py-2 small mb-3">
+                    新帳號建立後為停用狀態，需由管理員啟用並指派功能權限後才能使用。
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-dark">註冊</button>
+                    <a class="btn btn-outline-secondary" href="{% url 'accounts:index' %}">回首頁</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

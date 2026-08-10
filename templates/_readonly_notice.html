@@ -1,0 +1,12 @@
+{% comment %}
+Shown on pages that have editing controls while the site is in demo mode.
+The controls themselves are disabled rather than left clickable-but-failing,
+so nothing looks broken.
+{% endcomment %}
+{% if demo_mode %}
+<div class="readonly-note" role="status">
+    <strong>唯讀模式</strong>
+    ——
+    本頁的編輯功能在示範站停用，僅供檢視。完整版可正常編輯。
+</div>
+{% endif %}

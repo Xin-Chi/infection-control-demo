@@ -1,0 +1,42 @@
+{% load static assets %}<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8">
+    {% comment %}
+    The original pinned maximum-scale=1 / user-scalable=0, which blocks
+    pinch-zoom and fails accessibility guidance.
+    {% endcomment %}
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}感染管控收案系統{% endblock %}</title>
+
+    {% comment %}
+    Vendored locally: the original pulled Bootstrap from public CDNs, so the
+    site broke without internet access and trusted a third-party host.
+    {% endcomment %}
+    {% comment %}
+    static_v stamps each URL with the file's mtime, so an edited stylesheet is
+    never served from a stale browser cache.
+    {% endcomment %}
+    <link rel="stylesheet" href="{% static_v 'vendor/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static_v 'css/app.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+<div class="app-shell">
+    {% include 'navBar.html' %}
+
+    <main class="app-main">
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+<script src="{% static_v 'vendor/bootstrap.bundle.min.js' %}"></script>
+{% comment %}
+Exposed so scripts that build controls at runtime can disable them, instead of
+rendering controls that fail on click.
+{% endcomment %}
+<script>window.DEMO_MODE = {{ demo_mode|yesno:"true,false" }};</script>
+<script src="{% static_v 'js/app.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,87 @@
+{% comment %}
+Menus are driven by `nav_sections`, which the context processor reads from the
+database on every request.  The original read a list of characters out of the
+session, so a stale or tampered session decided the menu.
+
+In demo mode the site is a single public page, so the menu collapses to that
+one entry and the account controls disappear.
+{% endcomment %}
+<nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'accounts:index' %}">Demo</a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#mainNav" aria-controls="mainNav"
+                aria-expanded="false" aria-label="切換選單">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="mainNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'accounts:index' %}">首頁</a>
+                </li>
+
+                {% if demo_mode %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'infection:search' %}">查詢</a>
+                </li>
+                {% else %}
+
+                {% if 'research' in nav_sections %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button"
+                       data-bs-toggle="dropdown" aria-expanded="false">癌症研究</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'research:warehousing' %}">入庫清單</a></li>
+                        <li><a class="dropdown-item" href="{% url 'research:stage_confirm' %}">確認病患階段</a></li>
+                        <li><a class="dropdown-item" href="{% url 'research:topics' %}">研究主題</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                {% if 'infection' in nav_sections %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button"
+                       data-bs-toggle="dropdown" aria-expanded="false">感染管控</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'infection:tube_mapping' 'a' %}">管路確認</a></li>
+                        <li><a class="dropdown-item" href="{% url 'infection:tube_mapping' 'b' %}">管路歸類</a></li>
+                        <li><a class="dropdown-item" href="{% url 'infection:search' %}">查詢</a></li>
+                        <li><a class="dropdown-item" href="{% url 'infection:categorize' %}">歸類</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                {% if nav_can_administer %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button"
+                       data-bs-toggle="dropdown" aria-expanded="false">管理員專區</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'accounts:auth_control' %}">權限控管</a></li>
+                        <li><a class="dropdown-item" href="{% url 'admin:index' %}">資料維護</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                {% endif %}
+            </ul>
+
+            <div class="d-flex align-items-center gap-2">
+                {% if demo_mode %}
+                    <span class="navbar-text small">示範版 · 虛構資料 · 唯讀</span>
+                {% elif user.is_authenticated %}
+                    <span class="navbar-text">Hello {{ user.username }}</span>
+                    {% comment %}POST, so a third-party page cannot log the user out with a plain link or image tag.{% endcomment %}
+                    <form method="post" action="{% url 'accounts:logout' %}" class="m-0">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-secondary btn-sm">登 出</button>
+                    </form>
+                {% else %}
+                    <a class="btn btn-secondary btn-sm" href="{% url 'accounts:register' %}">註 冊</a>
+                    <a class="btn btn-secondary btn-sm" href="{% url 'accounts:login' %}">登 入</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</nav>

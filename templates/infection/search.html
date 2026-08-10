@@ -1,0 +1,783 @@
+{% extends 'base.html' %}
+{% block title %}查詢{% endblock %}
+
+{% block content %}
+{% comment %}
+Three panels in a responsive grid: patient list, timeline, detail.  The
+original placed each with `position: absolute` and percentage offsets, so they
+overlapped as soon as the window changed size.
+{% endcomment %}
+
+{% comment %}
+Shown on every visit to this page, before any record is displayed.  Uses
+Bootstrap's modal with a static backdrop so it cannot be dismissed by clicking
+away or pressing Esc — acknowledging it is the point.
+{% endcomment %}
+<div class="modal fade" id="demoNotice" tabindex="-1" data-bs-backdrop="static"
+     data-bs-keyboard="false" aria-labelledby="demoNoticeTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="demoNoticeTitle">示範資料聲明</h2>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">
+                    本站為<strong>介面展示用的示範網站</strong>，站內顯示的所有資料
+                    ——包含病患姓名、病歷號、病房、菌種、檢驗報告、護理紀錄與生命徵象——
+                    皆由程式自動產生的<strong>虛構資料</strong>。
+                </p>
+                <ul class="small mb-2">
+                    <li>不含任何真實病患資料，亦無任何個人資料。</li>
+                    <li>未連線任何醫院資訊系統或資料庫。</li>
+                    <li>報告內容與數值均為隨機產生，<strong>不具任何臨床意義</strong>。</li>
+                </ul>
+                <p class="small text-muted mb-0">
+                    本站為唯讀模式，不開放修改資料。
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-dark" id="demoNoticeConfirm">
+                    我已了解，繼續瀏覽
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="side-tabs">
+    <button type="button" class="side-tab" id="filterToggle">篩選</button>
+    <button type="button" class="side-tab" id="reportToggle">原始報告</button>
+</div>
+
+<div class="workspace workspace--three workspace--inset">
+    <section class="panel panel--navy">
+        <header class="panel__header d-flex justify-content-between align-items-center">
+            <span>病患清單</span>
+            <span class="record-list__meta" id="patientCount">0 位</span>
+        </header>
+        <div class="panel__body" id="patientList">
+            <div class="empty-state">請由左側「篩選」設定條件後查詢</div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <header class="panel__header">
+            <input type="search" class="form-control form-control-sm" id="chartSearch"
+                   placeholder="病歷號查詢" aria-label="病歷號查詢">
+            <div class="patient-chip" id="patientChip" hidden></div>
+        </header>
+
+        <div class="px-2 pt-2">
+            <div class="tab-row" id="categoryTabs">
+                <button type="button" class="tab-row__item is-active" data-category="admission" aria-pressed="true">住院</button>
+                <button type="button" class="tab-row__item" data-category="nursing" aria-pressed="false">護理紀錄</button>
+                <button type="button" class="tab-row__item" data-category="tube" aria-pressed="false">導管</button>
+                <button type="button" class="tab-row__item" data-category="vital" aria-pressed="false">異常生理評值</button>
+            </div>
+        </div>
+
+        <div class="panel__body">
+            <div class="panel panel--framed" style="min-height: 100%;">
+                <div class="panel__body" id="timeline">
+                    <div class="empty-state">請先選擇一位病患</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {% comment %}
+    Right-hand panel holds the parsed report; the 原始報告 drawer holds the
+    untouched source text the parse came from, so the two can be compared.
+    {% endcomment %}
+    <section class="panel panel--cream">
+        <header class="panel__header d-flex flex-wrap align-items-center gap-2">
+            <span>整理後報告</span>
+            <div class="tab-row ms-auto" id="detailTabs">
+                <button type="button" class="tab-row__item is-active" data-view="vitals" aria-pressed="true">
+                    生命徵象
+                </button>
+                <button type="button" class="tab-row__item" data-view="report" aria-pressed="false">
+                    檢驗／護理報告
+                </button>
+            </div>
+        </header>
+        <div class="panel__body" id="detail">
+            <div class="empty-state">選擇病患後顯示統整的生命徵象</div>
+        </div>
+    </section>
+</div>
+
+{# Filter drawer — slides in instead of occupying a fixed 20% column. #}
+<aside class="drawer drawer--left" id="filterDrawer">
+    <div class="drawer__header">
+        <span>篩選條件</span>
+        <button type="button" class="drawer__close" aria-label="關閉">&times;</button>
+    </div>
+    <div class="drawer__body">
+        <div class="filter-grid">
+            <div class="filter-field">
+                <label for="startDate">起始日期</label>
+                <input type="date" id="startDate" class="form-control form-control-sm">
+            </div>
+            <div class="filter-field">
+                <label for="endDate">終止日期</label>
+                <input type="date" id="endDate" class="form-control form-control-sm">
+            </div>
+            <div class="filter-field">
+                <label for="wardSelect">病房</label>
+                <select id="wardSelect" class="form-select form-select-sm"><option value="">全部</option></select>
+            </div>
+            <div class="filter-field">
+                <label for="divisionSelect">科別</label>
+                <select id="divisionSelect" class="form-select form-select-sm"><option value="">全部</option></select>
+            </div>
+            <div class="filter-field">
+                <label for="bacteriaSelect">菌種</label>
+                <select id="bacteriaSelect" class="form-select form-select-sm"><option value="">全部</option></select>
+            </div>
+        </div>
+
+        <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="inpatientOnly">
+            <label class="form-check-label" for="inpatientOnly">僅顯示住院事件</label>
+        </div>
+
+        <div class="filter-actions mt-3">
+            <button type="button" class="btn btn-sm btn-dark" id="applyFilter">查詢</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="resetFilter">重設</button>
+        </div>
+    </div>
+</aside>
+
+{# Report drawer. #}
+<aside class="drawer drawer--right" id="reportDrawer">
+    <div class="drawer__header">
+        <span>原始報告</span>
+        <button type="button" class="drawer__close" aria-label="關閉">&times;</button>
+    </div>
+    <div class="drawer__body" id="reportBody">
+        <div class="empty-state">點選時間軸上的事件以檢視原始報告全文</div>
+    </div>
+</aside>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+    const { getJSON, postJSON, el, clear, showEmpty, bindDrawer } = window.App;
+
+    const urls = {
+        filters: "{% url 'infection:search_filters' %}",
+        patients: "{% url 'infection:patient_list' %}",
+        timeline: "{% url 'infection:patient_timeline' %}",
+        report: "{% url 'infection:event_report' %}",
+        vitals: "{% url 'infection:vital_chart' %}",
+    };
+
+    const patientListEl = document.getElementById('patientList');
+    const patientCountEl = document.getElementById('patientCount');
+    const timelineEl = document.getElementById('timeline');
+    const detailEl = document.getElementById('detail');
+    const patientChipEl = document.getElementById('patientChip');
+    const detailTabsEl = document.getElementById('detailTabs');
+    const reportBodyEl = document.getElementById('reportBody');
+    const reportDrawer = document.getElementById('reportDrawer');
+    const chartSearch = document.getElementById('chartSearch');
+
+    let allPatients = [];
+    let selectedChartNo = null;
+    let activeCategories = new Set(['admission']);
+    let detailView = 'vitals';   // 'vitals' | 'report'
+    let vitalData = null;
+    let reportData = null;
+
+    bindDrawer('filterToggle', 'filterDrawer');
+    bindDrawer('reportToggle', 'reportDrawer');
+
+    function filterPayload() {
+        return {
+            start_date: document.getElementById('startDate').value,
+            end_date: document.getElementById('endDate').value,
+            ward: document.getElementById('wardSelect').value,
+            division: document.getElementById('divisionSelect').value,
+            bacteria: document.getElementById('bacteriaSelect').value,
+            inpatient_only: document.getElementById('inpatientOnly').checked ? 'true' : 'false',
+        };
+    }
+
+    function fillSelect(id, items, valueKey, labelKey) {
+        const select = document.getElementById(id);
+        items.forEach((item) => {
+            const option = el('option', null, item[labelKey]);
+            option.value = item[valueKey];
+            select.appendChild(option);
+        });
+    }
+
+    async function loadFilters() {
+        try {
+            const data = await getJSON(urls.filters);
+            fillSelect('wardSelect', data.wards, 'code', 'name');
+            fillSelect('divisionSelect', data.divisions, 'code', 'name');
+            fillSelect('bacteriaSelect', data.bacteria, 'id', 'name');
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    function renderPatients(patients) {
+        clear(patientListEl);
+        patientCountEl.textContent = `${patients.length} 位`;
+
+        if (!patients.length) {
+            showEmpty(patientListEl, '沒有符合條件的病患');
+            return;
+        }
+
+        const list = el('ul', 'record-list');
+        patients.forEach((patient) => {
+            const item = el('li');
+            const button = el('button', 'record-list__item');
+            button.type = 'button';
+            button.dataset.chartNo = patient.chart_no;
+            if (patient.chart_no === selectedChartNo) {
+                button.classList.add('is-active');
+            }
+            button.appendChild(el('span', null, `${patient.chart_no} ${patient.name}`));
+            button.appendChild(el('span', 'record-list__meta', patient.ward));
+            button.addEventListener('click', () => selectPatient(patient.chart_no));
+            item.appendChild(button);
+            list.appendChild(item);
+        });
+        patientListEl.appendChild(list);
+    }
+
+    async function loadPatients() {
+        patientListEl.classList.add('is-busy');
+        try {
+            const data = await postJSON(urls.patients, filterPayload());
+            allPatients = data.patients;
+            applyChartSearch();
+        } catch (err) {
+            showEmpty(patientListEl, `查詢失敗：${err.message}`);
+        } finally {
+            patientListEl.classList.remove('is-busy');
+        }
+    }
+
+    function applyChartSearch() {
+        const keyword = chartSearch.value.trim().toLowerCase();
+        const filtered = keyword
+            ? allPatients.filter((p) =>
+                  p.chart_no.toLowerCase().includes(keyword) ||
+                  p.name.toLowerCase().includes(keyword))
+            : allPatients;
+        renderPatients(filtered);
+    }
+
+    /** Patient identity sits with the timeline, freeing the right panel. */
+    function renderPatientChip(patient) {
+        clear(patientChipEl);
+        patientChipEl.hidden = false;
+        patientChipEl.appendChild(el('strong', null,
+            `${patient.chart_no} ${patient.name}`));
+        const meta = [patient.gender, patient.ward].filter(Boolean).join(' · ');
+        if (meta) { patientChipEl.appendChild(el('span', 'patient-chip__meta', meta)); }
+    }
+
+    // Inline SVG so the markers need no image request.  The size is pinned with
+    // width/height attributes as well as CSS: an attribute-less <svg> defaults
+    // to 300×150, so a stale or missing stylesheet would otherwise render these
+    // at full block size.
+    const ICON_BOX = 'width="14" height="14" viewBox="0 0 24 24"';
+    const ICONS = {
+        bacteria:
+            `<svg ${ICON_BOX} fill="none" stroke="currentColor" stroke-width="1.7" ` +
+            'stroke-linecap="round" aria-hidden="true" focusable="false">' +
+            '<ellipse cx="12" cy="12" rx="7" ry="4.2" transform="rotate(-35 12 12)"/>' +
+            '<circle cx="10" cy="13" r="1"/><circle cx="13.5" cy="10.5" r="1"/>' +
+            '<path d="M6.5 6.5 4.6 4.6M17.5 17.5l1.9 1.9M17.6 6.4l1.9-1.9M6.4 17.6l-1.9 1.9"/>' +
+            '</svg>',
+        fever:
+            `<svg ${ICON_BOX} fill="none" stroke="currentColor" stroke-width="1.7" ` +
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+            '<path d="M12 14.8V4.8a1.9 1.9 0 1 1 3.8 0v10a4 4 0 1 1-3.8 0Z"/>' +
+            '<circle cx="13.9" cy="17.4" r="1.5" fill="currentColor" stroke="none"/>' +
+            '<path d="M6.5 6h2M6.5 9.5h2M6.5 13h2"/>' +
+            '</svg>',
+    };
+
+    /** A table cell holding an icon plus text, with the icon labelled for AT. */
+    function iconCell(svg, text, iconClass, title) {
+        const td = el('td');
+        const wrap = el('span', 'cell-icon');
+        const holder = el('span', iconClass);
+        holder.innerHTML = svg;          // fixed markup above, not user data
+        holder.setAttribute('role', 'img');
+        holder.setAttribute('aria-label', title);
+        holder.title = title;
+        wrap.appendChild(holder);
+        wrap.appendChild(el('span', null, text));
+        td.appendChild(wrap);
+        return td;
+    }
+
+    /**
+     * The timeline, as a vertical event feed.
+     *
+     * Each entry carries a category accent on its left edge rather than a full
+     * background colour, so the only strong colour on screen marks something
+     * clinically abnormal (fever, a positive culture).  Vital signs render as
+     * a small inline grid instead of columns that fall off the panel.
+     */
+    function renderTimeline(events) {
+        clear(timelineEl);
+        if (!events.length) {
+            showEmpty(timelineEl, '此區間內沒有事件');
+            return;
+        }
+
+        const feed = el('ol', 'event-feed');
+        events.forEach((event) => {
+            const item = el('li', `event ev--${event.category}`);
+            if (event.has_fever) { item.classList.add('is-abnormal'); }
+            item.tabIndex = 0;
+            item.setAttribute('role', 'button');
+
+            const head = el('div', 'event__head');
+            head.appendChild(el('time', 'event__time', event.exec_date));
+            head.appendChild(el('span', 'event__type', event.type_name));
+
+            const where = [event.ward, event.division].filter(Boolean).join(' · ');
+            if (where) { head.appendChild(el('span', 'event__where', where)); }
+
+            if (event.report_count) {
+                head.appendChild(el('span', 'event__reports',
+                    `報告 ${event.report_count}`));
+            }
+            item.appendChild(head);
+
+            if (event.bacteria) {
+                const line = el('div', 'event__organism');
+                const holder = el('span',
+                    event.is_commensal ? 'icon-bacteria--commensal' : 'icon-bacteria');
+                holder.innerHTML = ICONS.bacteria;
+                holder.setAttribute('role', 'img');
+                holder.setAttribute('aria-label',
+                    event.is_commensal ? '常在菌' : '培養出菌種');
+                line.appendChild(holder);
+                line.appendChild(el('span', null, event.bacteria));
+                if (event.is_commensal) {
+                    line.appendChild(el('span', 'badge-commensal', '常在菌'));
+                }
+                item.appendChild(line);
+            }
+
+            if (event.temperature || event.blood_pressure) {
+                const vitals = el('div', 'vitals');
+                vitals.appendChild(vitalCell('BT',
+                    event.temperature ? `${event.temperature} °C` : '—',
+                    event.has_fever));
+                vitals.appendChild(vitalCell('BP', event.blood_pressure || '—', false));
+                vitals.appendChild(vitalCell('PULSE',
+                    event.pulse ? `${event.pulse} 次/分` : '—', false));
+                vitals.appendChild(vitalCell('SPO2',
+                    event.spo2 ? `${event.spo2} %` : '—', false));
+                item.appendChild(vitals);
+            }
+
+            const open = () => loadReport(event.id);
+            item.addEventListener('click', open);
+            item.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+            });
+            feed.appendChild(item);
+        });
+        timelineEl.appendChild(feed);
+    }
+
+    function vitalCell(label, value, abnormal) {
+        const cell = el('div', abnormal ? 'vital vital--abnormal' : 'vital');
+        cell.appendChild(el('span', 'vital__label', label));
+        const readout = el('span', 'vital__value');
+        if (abnormal) {
+            const holder = el('span', 'icon-fever');
+            holder.innerHTML = ICONS.fever;
+            holder.setAttribute('role', 'img');
+            holder.setAttribute('aria-label', '發燒');
+            readout.appendChild(holder);
+        }
+        readout.appendChild(el('span', null, value));
+        cell.appendChild(readout);
+        return cell;
+    }
+
+    async function selectPatient(chartNo) {
+        selectedChartNo = chartNo;
+        document.querySelectorAll('#patientList .record-list__item').forEach((node) => {
+            node.classList.toggle('is-active', node.dataset.chartNo === chartNo);
+        });
+
+        timelineEl.classList.add('is-busy');
+        try {
+            const payload = Object.assign({ chart_no: chartNo }, filterPayload());
+            ['admission', 'nursing', 'tube', 'vital'].forEach((category) => {
+                payload[category] = activeCategories.has(category) ? 'true' : 'false';
+            });
+            const data = await postJSON(urls.timeline, payload);
+            renderPatientChip(data.patient);
+            renderTimeline(data.events);
+            reportData = null;
+            setDetailView('vitals');
+            loadVitalChart(chartNo);
+        } catch (err) {
+            showEmpty(timelineEl, `載入失敗：${err.message}`);
+        } finally {
+            timelineEl.classList.remove('is-busy');
+        }
+    }
+
+    function headerLine(label, value) {
+        const line = el('div', 'lab-report__line');
+        line.appendChild(el('span', 'lab-report__label', label));
+        line.appendChild(el('span', 'lab-report__value', value || '—'));
+        return line;
+    }
+
+    /**
+     * A microbiology culture report.
+     *
+     * One specimen can grow several organisms, so the report renders a header
+     * block followed by one sensitivity panel per isolate.
+     */
+    function renderCultureReport(report) {
+        const block = el('div', 'lab-report');
+
+        const head = el('div', 'lab-report__head');
+        head.appendChild(el('div', 'lab-report__title',
+            `檢驗報告【${report.report_date}】`));
+        head.appendChild(headerLine('檢驗項目：', report.test_name));
+        head.appendChild(headerLine('檢驗來源：', report.specimen));
+        head.appendChild(headerLine('採檢時間：', report.collected_at));
+        head.appendChild(el('div', 'lab-report__no', `報告編號 ${report.report_no}`));
+        block.appendChild(head);
+
+        (report.isolates || []).forEach((isolate) => {
+            const caption = el('div', 'isolate__caption');
+            caption.appendChild(el('span', null, '菌種：'));
+
+            const name = el('span', 'cell-icon');
+            const icon = el('span',
+                isolate.is_commensal ? 'icon-bacteria--commensal' : 'icon-bacteria');
+            icon.innerHTML = ICONS.bacteria;
+            icon.setAttribute('role', 'img');
+            icon.setAttribute('aria-label', '菌種');
+            name.appendChild(icon);
+            name.appendChild(el('strong', null,
+                `${isolate.organism} (${isolate.growth})`));
+            caption.appendChild(name);
+
+            if (isolate.is_commensal) {
+                caption.appendChild(el('span', 'badge-commensal', '常在菌'));
+            }
+            block.appendChild(caption);
+
+            const panel = el('div', 'isolate');
+            const summary = el('div', 'isolate__summary');
+            summary.appendChild(el('span', null,
+                `${isolate.organism} (${isolate.growth})`));
+            summary.appendChild(el('span', 'isolate__count',
+                isolate.colony_count || '—'));
+            panel.appendChild(summary);
+
+            if (isolate.susceptibilities.length) {
+                const table = el('table', 'sens-table');
+                const tbody = el('tbody');
+                isolate.susceptibilities.forEach((row) => {
+                    const tr = el('tr');
+
+                    const verdict = el('td', 'sens-cell');
+                    const tag = el('span',
+                        `sens sens--${row.interpretation}`, row.interpretation);
+                    tag.title = row.label;
+                    verdict.appendChild(tag);
+                    tr.appendChild(verdict);
+
+                    tr.appendChild(el('td', 'mic-cell', row.mic || ''));
+                    tr.appendChild(el('td', 'drug-cell', row.antibiotic));
+                    tbody.appendChild(tr);
+                });
+                table.appendChild(tbody);
+                panel.appendChild(table);
+            } else {
+                panel.appendChild(el('div', 'isolate__empty', '未進行敏感性測試'));
+            }
+            block.appendChild(panel);
+        });
+
+        if (!report.isolates || !report.isolates.length) {
+            block.appendChild(el('div', 'isolate__empty', '無顯著菌落生長'));
+        }
+
+        if (report.content) {
+            block.appendChild(el('div', 'lab-report__comment', report.content));
+        }
+        return block;
+    }
+
+    // Vital-sign figures inside a narrative note, e.g. "體溫 38.4°C".
+    const VITAL_PATTERN =
+        /(體溫\s*[\d.]+\s*°?C|心跳\s*\d+\s*次\/分|呼吸\s*\d+\s*次\/分|血壓\s*[\d/]+\s*mmHg|血氧\s*\d+\s*%)/g;
+
+    /** A ward note; vital-sign figures are highlighted the way the ward does. */
+    function renderNarrativeReport(report) {
+        const block = el('div', 'note-block');
+
+        const title = el('div', 'note-block__title');
+        title.appendChild(el('span', null, report.kind_label));
+        title.appendChild(el('span', null, `${report.report_no} · ${report.exec_time}`));
+        block.appendChild(title);
+
+        const body = el('div', 'note-block__body');
+        // Split on the pattern and append each piece as text, so nothing from
+        // the report is ever parsed as HTML.
+        const parts = String(report.content).split(VITAL_PATTERN);
+        parts.forEach((part) => {
+            if (!part) { return; }
+            if (VITAL_PATTERN.test(part)) {
+                VITAL_PATTERN.lastIndex = 0;
+                const temp = /體溫\s*([\d.]+)/.exec(part);
+                const high = temp && parseFloat(temp[1]) >= 38.0;
+                body.appendChild(el('span',
+                    high ? 'vital-mark vital-mark--high' : 'vital-mark', part));
+            } else {
+                body.appendChild(document.createTextNode(part));
+            }
+            VITAL_PATTERN.lastIndex = 0;
+        });
+        block.appendChild(body);
+        return block;
+    }
+
+    /**
+     * Load one event's reports into both views at once.
+     *
+     * Right panel gets the parsed form; the drawer gets the source text the
+     * parse was derived from.  Opening the drawer never re-fetches — the two
+     * views are always showing the same report.
+     */
+    /**
+     * The patient's consolidated vital-sign chart.
+     *
+     * Every reading for the patient in one table, not the readings of a single
+     * note.  Abnormal cells are filled rather than merely tinted, and carry a
+     * title saying which direction they are out of range, so the meaning does
+     * not rest on colour alone.
+     */
+    function renderVitalChart(data) {
+        if (!data.measurements.length) {
+            showEmpty(detailEl, '此病患沒有生命徵象紀錄');
+            return;
+        }
+
+        const columns = [
+            ['pulse', '脈搏', '(次/分)'],
+            ['respiration', '呼吸', '(次/分)'],
+            ['spo2', '血氧', '(%)'],
+            ['temperature', '體溫', '(°C)'],
+            ['systolic', '血壓 收縮壓', '(mmHg)'],
+            ['diastolic', '血壓 舒張壓', '(mmHg)'],
+        ];
+
+        const wrap = el('div', 'table-scroll');
+        const table = el('table', 'vital-chart');
+
+        const thead = el('thead');
+        const headRow = el('tr');
+        headRow.appendChild(el('th', null, 'Time'));
+        columns.forEach(([, label, unit]) => {
+            const th = el('th');
+            th.appendChild(el('div', null, label));
+            th.appendChild(el('div', 'vital-chart__unit', unit));
+            headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = el('tbody');
+        data.measurements.forEach((row) => {
+            const tr = el('tr');
+            tr.appendChild(el('td', 'vital-chart__time', row.measured_at));
+            columns.forEach(([key]) => {
+                const cell = row[key];
+                const td = el('td', 'vital-chart__cell', cell.value);
+                if (cell.status) {
+                    td.classList.add(`is-${cell.status}`);
+                    td.title = cell.status === 'high' ? '高於參考範圍' : '低於參考範圍';
+                }
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+
+        clear(detailEl);
+        detailEl.appendChild(wrap);
+    }
+
+    async function loadVitalChart(chartNo) {
+        if (!chartNo) { return; }
+        try {
+            const payload = Object.assign({ chart_no: chartNo }, filterPayload());
+            const data = await postJSON(urls.vitals, payload);
+            vitalData = data;
+            if (detailView === 'vitals') { renderVitalChart(data); }
+        } catch (err) {
+            vitalData = null;
+            if (detailView === 'vitals') {
+                showEmpty(detailEl, `載入失敗：${err.message}`);
+            }
+        }
+    }
+
+    /**
+     * Load one event's reports.
+     *
+     * The parsed form goes to the right panel's report tab; the drawer gets
+     * the source text it was derived from, so the two can be compared.
+     */
+    async function loadReport(eventId) {
+        clear(reportBodyEl);
+        reportData = null;
+
+        try {
+            const data = await postJSON(urls.report, { event_id: eventId });
+            reportData = data.reports;
+
+            if (!data.reports.length) {
+                showEmpty(reportBodyEl, '此事件沒有對應的報告');
+            } else {
+                data.reports.forEach((report) => {
+                    reportBodyEl.appendChild(renderRawReport(report));
+                });
+            }
+
+            // Opening an event is a request to read it, so switch tabs.
+            setDetailView('report');
+        } catch (err) {
+            showEmpty(reportBodyEl, `載入失敗：${err.message}`);
+            showEmpty(detailEl, `載入失敗：${err.message}`);
+        }
+    }
+
+    function renderReportView() {
+        clear(detailEl);
+        if (reportData === null) {
+            showEmpty(detailEl, '點選時間軸上的事件以檢視整理後的報告');
+            return;
+        }
+        if (!reportData.length) {
+            showEmpty(detailEl, '此事件沒有對應的報告');
+            return;
+        }
+        reportData.forEach((report) => {
+            detailEl.appendChild(
+                report.kind === 'culture'
+                    ? renderCultureReport(report)
+                    : renderNarrativeReport(report));
+        });
+    }
+
+    function setDetailView(view) {
+        detailView = view;
+        detailTabsEl.querySelectorAll('.tab-row__item').forEach((button) => {
+            const on = button.dataset.view === view;
+            button.classList.toggle('is-active', on);
+            button.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        if (view === 'vitals') {
+            if (vitalData) { renderVitalChart(vitalData); }
+            else { showEmpty(detailEl, '選擇病患後顯示統整的生命徵象'); }
+        } else {
+            renderReportView();
+        }
+    }
+
+    /** The report exactly as the source system emits it. */
+    function renderRawReport(report) {
+        const block = el('div', 'raw-report');
+
+        const head = el('div', 'raw-report__head');
+        head.appendChild(el('span', null, report.kind_label));
+        head.appendChild(el('span', 'raw-report__no', report.report_no));
+        block.appendChild(head);
+
+        // <pre> + textContent: the source text keeps its own alignment and is
+        // never interpreted as markup.
+        const pre = el('pre', 'raw-report__body',
+            report.raw_text || report.content || '（此報告沒有原始文字）');
+        block.appendChild(pre);
+        return block;
+    }
+
+    document.getElementById('categoryTabs').addEventListener('click', (event) => {
+        const button = event.target.closest('.tab-row__item');
+        if (!button) { return; }
+        const category = button.dataset.category;
+        if (activeCategories.has(category)) {
+            // Keep at least one category on, or the timeline would be blank.
+            if (activeCategories.size > 1) {
+                activeCategories.delete(category);
+                button.classList.remove('is-active');
+            }
+        } else {
+            activeCategories.add(category);
+            button.classList.add('is-active');
+        }
+        button.setAttribute('aria-pressed',
+            button.classList.contains('is-active') ? 'true' : 'false');
+        if (selectedChartNo) { selectPatient(selectedChartNo); }
+    });
+
+    detailTabsEl.addEventListener('click', (event) => {
+        const button = event.target.closest('.tab-row__item');
+        if (button) { setDetailView(button.dataset.view); }
+    });
+
+    document.getElementById('applyFilter').addEventListener('click', loadPatients);
+    document.getElementById('resetFilter').addEventListener('click', () => {
+        ['startDate', 'endDate'].forEach((id) => { document.getElementById(id).value = ''; });
+        ['wardSelect', 'divisionSelect', 'bacteriaSelect'].forEach((id) => {
+            document.getElementById(id).value = '';
+        });
+        document.getElementById('inpatientOnly').checked = false;
+        loadPatients();
+    });
+    chartSearch.addEventListener('input', applyChartSearch);
+
+    /*
+     * Shown on every visit rather than remembered: the notice is what makes it
+     * unambiguous that these are not real records, so a returning visitor —
+     * or an interviewer opening a shared link — should always see it.
+     */
+    function showDemoNotice() {
+        const node = document.getElementById('demoNotice');
+        if (!node || !window.bootstrap) { return; }
+
+        const modal = new window.bootstrap.Modal(node);
+        document.getElementById('demoNoticeConfirm')
+            .addEventListener('click', () => modal.hide());
+        // Focus the only action, so it can be dismissed with Enter alone.
+        node.addEventListener('shown.bs.modal', () => {
+            document.getElementById('demoNoticeConfirm').focus();
+        });
+        modal.show();
+    }
+
+    showDemoNotice();
+    loadFilters().then(loadPatients);
+})();
+</script>
+{% endblock %}

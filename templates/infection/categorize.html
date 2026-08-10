@@ -1,0 +1,287 @@
+{% extends 'base.html' %}
+{% block title %}歸類{% endblock %}
+
+{% block content %}
+{% include '_readonly_notice.html' %}
+
+<div class="workspace-header">
+    <h1 class="page-title">字詞歸類</h1>
+    <span class="spacer"></span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="狀態切換">
+        <button type="button" class="btn btn-dark" id="modeConfirmed">已確認</button>
+        <button type="button" class="btn btn-outline-dark" id="modePending">待確認</button>
+    </div>
+</div>
+
+<div class="workspace workspace--three">
+    <section class="panel panel--navy">
+        <header class="panel__header">感染分類</header>
+        <div class="panel__body" id="categoryList">
+            <div class="empty-state">載入中…</div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <header class="panel__header">
+            <input type="search" class="form-control form-control-sm" id="tokenSearch"
+                   placeholder="字詞搜尋" aria-label="字詞搜尋">
+        </header>
+        <div class="panel__body" id="tokenList">
+            <div class="empty-state">請先選擇左側分類</div>
+        </div>
+        <footer class="panel__footer">
+            <div class="filter-actions" id="pendingActions" hidden>
+                <button type="button" class="btn btn-sm btn-success" id="confirmSelected">確認選取</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" id="abandonSelected">捨棄選取</button>
+            </div>
+            <div class="filter-actions" id="confirmedActions">
+                <input type="text" class="form-control form-control-sm" id="targetCategory"
+                       placeholder="歸入分類名稱" style="max-width: 12rem;">
+                <button type="button" class="btn btn-sm btn-dark" id="addToConversion">加入歸類</button>
+            </div>
+        </footer>
+    </section>
+
+    <section class="panel panel--cream">
+        <header class="panel__header">已歸類詞庫</header>
+        <div class="panel__body" id="conversionList">
+            <div class="empty-state">尚未建立歸類分類</div>
+        </div>
+        <footer class="panel__footer">
+            <button type="button" class="btn btn-sm btn-outline-danger" id="removeSelected" disabled>
+                移除選取字詞
+            </button>
+        </footer>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+    const { getJSON, postJSON, el, clear, showEmpty } = window.App;
+
+    const urls = {
+        categories: "{% url 'infection:category_list' %}",
+        tokens: "{% url 'infection:token_pool' %}",
+        review: "{% url 'infection:review_tokens' %}",
+        conversionCategories: "{% url 'infection:conversion_categories' %}",
+        conversionTokens: "{% url 'infection:conversion_tokens' %}",
+        add: "{% url 'infection:add_to_conversion' %}",
+        remove: "{% url 'infection:remove_from_conversion' %}",
+    };
+    const POOL = '感染管控詞庫';
+
+    const categoryListEl = document.getElementById('categoryList');
+    const tokenListEl = document.getElementById('tokenList');
+    const conversionListEl = document.getElementById('conversionList');
+    const tokenSearch = document.getElementById('tokenSearch');
+    const pendingActions = document.getElementById('pendingActions');
+    const confirmedActions = document.getElementById('confirmedActions');
+    const removeButton = document.getElementById('removeSelected');
+
+    let mode = 'confirmed';
+    let selectedCategoryId = null;
+    let selectedConversionId = null;
+
+    function setMode(next) {
+        mode = next;
+        document.getElementById('modeConfirmed').className =
+            next === 'confirmed' ? 'btn btn-dark' : 'btn btn-outline-dark';
+        document.getElementById('modePending').className =
+            next === 'pending' ? 'btn btn-dark' : 'btn btn-outline-dark';
+        pendingActions.hidden = next !== 'pending';
+        confirmedActions.hidden = next !== 'confirmed';
+        loadCategories();
+    }
+
+    async function loadCategories() {
+        try {
+            const data = await getJSON(urls.categories);
+            const items = mode === 'confirmed' ? data.confirmed : data.pending;
+            clear(categoryListEl);
+            if (!items.length) {
+                showEmpty(categoryListEl, '此狀態下沒有分類');
+                clear(tokenListEl);
+                showEmpty(tokenListEl, '請先選擇左側分類');
+                return;
+            }
+            const list = el('ul', 'record-list');
+            items.forEach((item) => {
+                const li = el('li');
+                const button = el('button', 'record-list__item');
+                button.type = 'button';
+                if (item.id === selectedCategoryId) { button.classList.add('is-active'); }
+                button.appendChild(el('span', null, item.name));
+                button.appendChild(el('span', 'record-list__meta', `${item.total} 筆`));
+                button.addEventListener('click', () => selectCategory(item.id, button));
+                li.appendChild(button);
+                list.appendChild(li);
+            });
+            categoryListEl.appendChild(list);
+        } catch (err) {
+            showEmpty(categoryListEl, `載入失敗：${err.message}`);
+        }
+    }
+
+    async function selectCategory(categoryId, button) {
+        selectedCategoryId = categoryId;
+        categoryListEl.querySelectorAll('.record-list__item')
+            .forEach((node) => node.classList.remove('is-active'));
+        if (button) { button.classList.add('is-active'); }
+        await loadTokens();
+    }
+
+    async function loadTokens() {
+        if (!selectedCategoryId) { return; }
+        try {
+            const data = await postJSON(urls.tokens, {
+                category_id: selectedCategoryId,
+                status: mode,
+                keyword: tokenSearch.value.trim(),
+            });
+            clear(tokenListEl);
+            if (!data.tokens.length) {
+                showEmpty(tokenListEl, '沒有符合的字詞');
+                return;
+            }
+            const list = el('ul', 'record-list');
+            data.tokens.forEach((token) => {
+                const li = el('li');
+                const label = el('label', 'record-list__item');
+                const checkbox = el('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = token.id;
+                checkbox.className = 'form-check-input m-0 me-2';
+                label.appendChild(checkbox);
+                label.appendChild(el('span', null, token.text));
+                label.appendChild(el('span', 'record-list__meta',
+                    token.categorized_count ? `已歸類 ${token.categorized_count}` : ''));
+                li.appendChild(label);
+                list.appendChild(li);
+            });
+            tokenListEl.appendChild(list);
+        } catch (err) {
+            showEmpty(tokenListEl, `載入失敗：${err.message}`);
+        }
+    }
+
+    function selectedTokenIds() {
+        return Array.from(tokenListEl.querySelectorAll('input[type=checkbox]:checked'))
+            .map((node) => node.value);
+    }
+
+    async function loadConversion() {
+        try {
+            const data = await getJSON(urls.conversionCategories, { pool: POOL });
+            clear(conversionListEl);
+            if (!data.categories.length) {
+                showEmpty(conversionListEl, '尚未建立歸類分類');
+                return;
+            }
+            const list = el('ul', 'record-list');
+            data.categories.forEach((category) => {
+                const li = el('li');
+                const button = el('button', 'record-list__item');
+                button.type = 'button';
+                button.appendChild(el('span', null, category.name));
+                button.appendChild(el('span', 'record-list__meta', `${category.total} 筆`));
+                button.addEventListener('click', () => showConversionTokens(category.id, button));
+                li.appendChild(button);
+                list.appendChild(li);
+            });
+            conversionListEl.appendChild(list);
+        } catch (err) {
+            showEmpty(conversionListEl, `載入失敗：${err.message}`);
+        }
+    }
+
+    async function showConversionTokens(categoryId, button) {
+        selectedConversionId = categoryId;
+        conversionListEl.querySelectorAll('.record-list__item')
+            .forEach((node) => node.classList.remove('is-active'));
+        button.classList.add('is-active');
+        removeButton.disabled = false;
+
+        const data = await postJSON(urls.conversionTokens, { category_id: categoryId });
+        let holder = button.parentElement.querySelector('.conversion-tokens');
+        if (holder) { holder.remove(); }
+        holder = el('div', 'conversion-tokens ps-2 pt-1');
+        if (!data.tokens.length) {
+            holder.appendChild(el('div', 'record-list__meta', '（此分類沒有字詞）'));
+        }
+        data.tokens.forEach((token) => {
+            const label = el('label', 'd-flex align-items-center gap-2 small py-1');
+            const checkbox = el('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = token.id;
+            checkbox.className = 'form-check-input m-0 conversion-token';
+            label.appendChild(checkbox);
+            label.appendChild(el('span', null, token.text));
+            holder.appendChild(label);
+        });
+        button.parentElement.appendChild(holder);
+    }
+
+    document.getElementById('modeConfirmed').addEventListener('click', () => setMode('confirmed'));
+    document.getElementById('modePending').addEventListener('click', () => setMode('pending'));
+    tokenSearch.addEventListener('input', () => loadTokens());
+
+    document.getElementById('confirmSelected').addEventListener('click', async () => {
+        const ids = selectedTokenIds();
+        if (!ids.length) { return; }
+        await postJSON(urls.review, { category_id: selectedCategoryId, 'confirm_ids[]': ids });
+        await loadTokens();
+        await loadCategories();
+    });
+
+    document.getElementById('abandonSelected').addEventListener('click', async () => {
+        const ids = selectedTokenIds();
+        if (!ids.length) { return; }
+        await postJSON(urls.review, { category_id: selectedCategoryId, 'abandon_ids[]': ids });
+        await loadTokens();
+        await loadCategories();
+    });
+
+    document.getElementById('addToConversion').addEventListener('click', async () => {
+        const ids = selectedTokenIds();
+        const name = document.getElementById('targetCategory').value.trim();
+        if (!ids.length || !name) {
+            alert('請輸入分類名稱並選取至少一個字詞');
+            return;
+        }
+        await postJSON(urls.add, { name, pool: POOL, 'token_ids[]': ids });
+        await loadConversion();
+        await loadTokens();
+    });
+
+    removeButton.addEventListener('click', async () => {
+        const ids = Array.from(conversionListEl.querySelectorAll('.conversion-token:checked'))
+            .map((node) => node.value);
+        if (!selectedConversionId || !ids.length) { return; }
+        await postJSON(urls.remove, { category_id: selectedConversionId, 'token_ids[]': ids });
+        selectedConversionId = null;
+        removeButton.disabled = true;
+        await loadConversion();
+    });
+
+    // In demo mode the write endpoints refuse; disable the controls that call
+    // them so nothing looks clickable-but-broken.
+    if (window.DEMO_MODE) {
+        ['confirmSelected', 'abandonSelected', 'addToConversion',
+         'removeSelected', 'targetCategory'].forEach((id) => {
+            const node = document.getElementById(id);
+            if (node) {
+                node.disabled = true;
+                node.classList.add('is-readonly');
+                node.title = '示範站為唯讀模式';
+            }
+        });
+    }
+
+    setMode('confirmed');
+    loadConversion();
+})();
+</script>
+{% endblock %}

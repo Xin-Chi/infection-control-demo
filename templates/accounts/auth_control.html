@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+{% block title %}權限控管{% endblock %}
+
+{% block content %}
+{% include '_readonly_notice.html' %}
+
+<div class="workspace-header">
+    <h1 class="page-title">權限控管</h1>
+    <span class="spacer"></span>
+    <span class="text-muted small">僅列出一般使用者；管理員帳號不可於此變更</span>
+</div>
+
+<div class="workspace workspace--two">
+    <section class="panel panel--navy">
+        <header class="panel__header">使用者</header>
+        <div class="panel__body" id="userList">
+            <div class="empty-state">載入中…</div>
+        </div>
+    </section>
+
+    <section class="panel panel--framed">
+        <div class="panel__body" id="detailPanel">
+            <div class="empty-state">請先選擇使用者</div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+    const { getJSON, postJSON, el, clear, showEmpty } = window.App;
+
+    const urls = {
+        users: "{% url 'accounts:user_list' %}",
+        detail: "{% url 'accounts:user_detail' %}",
+        topics: "{% url 'accounts:topic_list' %}",
+        toggleSection: "{% url 'accounts:toggle_section' %}",
+        toggleTopic: "{% url 'accounts:toggle_topic' %}",
+        toggleFlag: "{% url 'accounts:toggle_flag' %}",
+    };
+
+    const SECTIONS = [
+        {% for value, label in sections %}{ value: "{{ value }}", label: "{{ label }}" }{% if not forloop.last %},{% endif %}{% endfor %}
+    ];
+    const FLAGS = [
+        { key: 'is_active', label: '啟用帳號' },
+        { key: 'de_identification', label: '去識別化顯示病患姓名' },
+        { key: 'can_see_all_reviews', label: '可檢視所有人的標註' },
+        { key: 'can_edit_stage_definition', label: '可編輯階段定義' },
+    ];
+
+    const userListEl = document.getElementById('userList');
+    const detailPanelEl = document.getElementById('detailPanel');
+
+    let topics = [];
+    let currentUsername = null;
+
+    async function loadUsers() {
+        try {
+            const [userData, topicData] = await Promise.all([
+                getJSON(urls.users), getJSON(urls.topics),
+            ]);
+            topics = topicData.topics;
+
+            clear(userListEl);
+            if (!userData.users.length) {
+                showEmpty(userListEl, '沒有一般使用者');
+                return;
+            }
+            const list = el('ul', 'record-list');
+            userData.users.forEach((user) => {
+                const li = el('li');
+                const button = el('button', 'record-list__item');
+                button.type = 'button';
+                button.appendChild(el('span', null,
+                    user.display_name ? `${user.username}（${user.display_name}）` : user.username));
+                button.appendChild(el('span',
+                    user.is_active ? 'badge bg-success' : 'badge bg-secondary',
+                    user.is_active ? '啟用' : '停用'));
+                button.addEventListener('click', () => selectUser(user.username, button));
+                li.appendChild(button);
+                list.appendChild(li);
+            });
+            userListEl.appendChild(list);
+        } catch (err) {
+            showEmpty(userListEl, `載入失敗：${err.message}`);
+        }
+    }
+
+    async function selectUser(username, button) {
+        currentUsername = username;
+        userListEl.querySelectorAll('.record-list__item')
+            .forEach((node) => node.classList.remove('is-active'));
+        if (button) { button.classList.add('is-active'); }
+        await renderDetail();
+    }
+
+    /** Disable a control that would call a refused endpoint. */
+    function lockIfDemo(node) {
+        if (!window.DEMO_MODE) { return; }
+        node.disabled = true;
+        node.classList.add('is-readonly');
+        node.title = '示範站為唯讀模式';
+    }
+
+    async function renderDetail() {
+        const data = await getJSON(urls.detail, { username: currentUsername });
+        clear(detailPanelEl);
+        detailPanelEl.appendChild(el('h2', 'page-title mb-3', data.username));
+
+        // Account flags
+        detailPanelEl.appendChild(el('h3', 'h6 mt-2', '帳號設定'));
+        const flagBox = el('div', 'd-flex flex-column gap-2 mb-4');
+        FLAGS.forEach((flag) => {
+            const label = el('label', 'record-list__item');
+            const checkbox = el('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'form-check-input m-0 me-2';
+            checkbox.checked = Boolean(data[flag.key]);
+            lockIfDemo(checkbox);
+            checkbox.addEventListener('change', async () => {
+                checkbox.disabled = true;
+                try {
+                    await postJSON(urls.toggleFlag, {
+                        username: currentUsername, flag: flag.key,
+                    });
+                    await loadUsers();
+                } catch (err) {
+                    alert(`更新失敗：${err.message}`);
+                    checkbox.checked = !checkbox.checked;
+                } finally {
+                    checkbox.disabled = false;
+                }
+            });
+            label.appendChild(checkbox);
+            label.appendChild(el('span', null, flag.label));
+            flagBox.appendChild(label);
+        });
+        detailPanelEl.appendChild(flagBox);
+
+        // Section grants
+        detailPanelEl.appendChild(el('h3', 'h6', '功能區塊權限'));
+        const sectionBox = el('div', 'd-flex flex-column gap-2 mb-4');
+        SECTIONS.forEach((section) => {
+            const label = el('label', 'record-list__item');
+            const checkbox = el('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'form-check-input m-0 me-2';
+            checkbox.checked = data.sections.includes(section.value);
+            lockIfDemo(checkbox);
+            checkbox.addEventListener('change', async () => {
+                checkbox.disabled = true;
+                try {
+                    await postJSON(urls.toggleSection, {
+                        username: currentUsername, section: section.value,
+                    });
+                } catch (err) {
+                    alert(`更新失敗：${err.message}`);
+                    checkbox.checked = !checkbox.checked;
+                } finally {
+                    checkbox.disabled = false;
+                }
+            });
+            label.appendChild(checkbox);
+            label.appendChild(el('span', null, section.label));
+            sectionBox.appendChild(label);
+        });
+        detailPanelEl.appendChild(sectionBox);
+
+        // Topic grants
+        detailPanelEl.appendChild(el('h3', 'h6', '研究主題權限'));
+        const topicBox = el('div', 'd-flex flex-column gap-2');
+        topics.forEach((topic) => {
+            const label = el('label', 'record-list__item');
+            const checkbox = el('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'form-check-input m-0 me-2';
+            checkbox.checked = data.topics.includes(topic.id);
+            lockIfDemo(checkbox);
+            checkbox.addEventListener('change', async () => {
+                checkbox.disabled = true;
+                try {
+                    await postJSON(urls.toggleTopic, {
+                        username: currentUsername, topic_id: topic.id,
+                    });
+                } catch (err) {
+                    alert(`更新失敗：${err.message}`);
+                    checkbox.checked = !checkbox.checked;
+                } finally {
+                    checkbox.disabled = false;
+                }
+            });
+            label.appendChild(checkbox);
+            label.appendChild(el('span', null, topic.name));
+            topicBox.appendChild(label);
+        });
+        detailPanelEl.appendChild(topicBox);
+    }
+
+    loadUsers();
+})();
+</script>
+{% endblock %}

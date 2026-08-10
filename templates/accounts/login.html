@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}登入{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-center align-items-start" style="flex: 1 1 auto;">
+    <div class="panel" style="flex: 0 1 26rem; max-width: 100%; margin-top: 2rem;">
+        <div class="panel__header">請登入</div>
+        <div class="panel__body">
+            <form method="post" novalidate>
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger py-2 small">
+                    {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form.username.id_for_label }}">帳號</label>
+                    <input type="text" name="username" id="{{ form.username.id_for_label }}"
+                           class="form-control" autocomplete="username" required>
+                    {% for error in form.username.errors %}
+                    <div class="text-danger small mt-1">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form.password.id_for_label }}">密碼</label>
+                    <input type="password" name="password" id="{{ form.password.id_for_label }}"
+                           class="form-control" autocomplete="current-password" required>
+                    {% for error in form.password.errors %}
+                    <div class="text-danger small mt-1">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-dark">登入</button>
+                    <a class="btn btn-outline-secondary" href="{% url 'accounts:index' %}">回首頁</a>
+                    <a class="btn btn-link" href="{% url 'accounts:register' %}">還沒有帳號？</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

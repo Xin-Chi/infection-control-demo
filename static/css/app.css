@@ -1,0 +1,1009 @@
+/*
+ * Layout system for the 感染管控收案系統 demo.
+ *
+ * The original pages positioned every panel absolutely against hand-tuned
+ * offsets (`top: 65px; left: calc(22% + 20px); width: 30%`) with no media
+ * queries, so the layout only held together at one window size.  Here the
+ * page is a flex column, each screen is a CSS grid, and the grid collapses
+ * to fewer columns as the viewport narrows.
+ *
+ * The visual identity is unchanged: textured background, dark navy list
+ * panel, cream detail panel, dark-bordered content frame, red side tabs.
+ */
+
+:root {
+    --navbar-height: 56px;
+    --panel-gap: 0.75rem;
+    --page-pad: 0.75rem;
+
+    --navy: #30475e;
+    --navy-dark: #32435f;
+    --cream: #f5f5dc;
+    --accent: #f05454;
+    --frame: #333;
+
+    --radius: 10px;
+    --shadow: 0 0 10px 5px rgba(0, 0, 0, 0.2);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    /* The original set `position: fixed` here, which froze the page and made
+       overflowing content unreachable. */
+    background-image: url('../image/texture.png');
+    background-color: #eee;
+    font-family: 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
+}
+
+/* ---- Page shell --------------------------------------------------------- */
+
+.app-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding-top: var(--navbar-height);
+}
+
+/*
+ * On desktop the shell is exactly one viewport tall so panels scroll
+ * internally.  Height is not hard-coded on the grid itself — any toolbar above
+ * it would then push the last row off-screen.
+ */
+@media (min-width: 992px) {
+    .app-shell {
+        height: 100vh;
+    }
+}
+
+.app-main {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;              /* lets children scroll instead of the page */
+    padding: var(--page-pad);
+    gap: var(--panel-gap);
+}
+
+.page-title {
+    margin: 0;
+    font-size: clamp(1.05rem, 1.6vw, 1.4rem);
+    font-weight: 600;
+    color: #222;
+}
+
+/* ---- Panels ------------------------------------------------------------- */
+
+.panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    background-image: url('../image/texture.png');
+    background-color: #fff;
+    overflow: hidden;
+}
+
+.panel--navy {
+    background-color: var(--navy);
+    color: #fff;
+}
+
+.panel--cream {
+    background-color: var(--cream);
+}
+
+.panel--framed {
+    border: 8px solid var(--frame);
+}
+
+.panel__header {
+    flex: 0 0 auto;
+    padding: 0.6rem 0.75rem;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+    background-color: rgba(255, 255, 255, 0.75);
+}
+
+.panel--navy .panel__header {
+    background-color: rgba(0, 0, 0, 0.25);
+    border-bottom-color: rgba(255, 255, 255, 0.18);
+}
+
+.panel__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;             /* each panel scrolls on its own */
+    padding: 0.75rem;
+}
+
+.panel__footer {
+    flex: 0 0 auto;
+    padding: 0.5rem 0.75rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+    background-color: rgba(255, 255, 255, 0.75);
+}
+
+/* ---- Responsive workspace grids ---------------------------------------- */
+/*
+ * Screens declare how many columns they want; the grid collapses to a single
+ * scrolling column on narrow viewports rather than overflowing sideways.
+ */
+
+.workspace {
+    flex: 1 1 auto;
+    display: grid;
+    gap: var(--panel-gap);
+    min-height: 0;
+    grid-template-columns: 1fr;
+}
+
+/* Panels get a workable height once they are stacked in one column. */
+@media (max-width: 991.98px) {
+    .workspace > .panel {
+        min-height: 16rem;
+    }
+}
+
+@media (min-width: 992px) {
+    .workspace--two {
+        grid-template-columns: minmax(14rem, 1fr) minmax(0, 2.2fr);
+    }
+
+    /* Timeline and parsed report are read side by side, so the right panel
+       gets the wider share — the sensitivity panel needs the room. */
+    .workspace--three {
+        grid-template-columns: minmax(11rem, 0.75fr) minmax(0, 1.35fr) minmax(0, 1.6fr);
+    }
+
+    .workspace--sidebar {
+        grid-template-columns: minmax(13rem, 1fr) minmax(0, 3fr);
+    }
+}
+
+/* Between tablet and desktop, three-column screens drop to two. */
+@media (min-width: 992px) and (max-width: 1279.98px) {
+    .workspace--three {
+        grid-template-columns: minmax(11rem, 1fr) minmax(0, 2fr);
+        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .workspace--three > .panel:first-child {
+        grid-row: 1 / span 2;
+    }
+}
+
+/* A workspace whose header row sits above the panels. */
+.workspace-header {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.workspace-header .spacer {
+    flex: 1 1 auto;
+}
+
+/* ---- Filter / toolbar rows --------------------------------------------- */
+
+.filter-grid {
+    display: grid;
+    gap: 0.6rem;
+    /* Fields wrap by available width instead of fixed percentages. */
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+
+.filter-grid .filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.filter-field label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #444;
+}
+
+.panel--navy .filter-field label {
+    color: #dfe6ef;
+}
+
+.filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* ---- Lists -------------------------------------------------------------- */
+
+.record-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.record-list__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.9);
+    color: #222;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.record-list__item:hover {
+    background-color: #fff;
+    border-color: var(--accent);
+}
+
+.record-list__item.is-active {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.record-list__meta {
+    font-size: 0.78rem;
+    opacity: 0.75;
+    white-space: nowrap;
+}
+
+/* ---- Tables ------------------------------------------------------------- */
+
+.table-scroll {
+    /* Wide tables scroll inside their panel; the page never scrolls sideways. */
+    width: 100%;
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+    background-color: rgba(255, 255, 255, 0.92);
+}
+
+.data-table th,
+.data-table td {
+    padding: 0.4rem 0.55rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.data-table th {
+    position: sticky;
+    top: 0;
+    background-color: #e9ecef;
+    z-index: 1;
+}
+
+.data-table tbody tr:hover {
+    background-color: #fff4f4;
+}
+
+.data-table td.wrap {
+    white-space: normal;
+    min-width: 14rem;
+}
+
+/* ---- Tabs --------------------------------------------------------------- */
+
+.tab-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+/*
+ * Selected tabs are filled and dark, unselected are pale — the direction
+ * people expect from a toggle.  The original had it inverted, so the tab that
+ * looked "pressed" was the one that was off.
+ */
+.tab-row__item {
+    padding: 0.4rem 0.9rem;
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 6px 6px 0 0;
+    background-color: #f4f5f6;
+    color: #5a646f;
+    cursor: pointer;
+    font-size: 0.88rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.tab-row__item:hover {
+    background-color: #e6e9ec;
+    color: #2f3a45;
+}
+
+.tab-row__item.is-active {
+    background-color: #2f4257;
+    border-color: #2f4257;
+    color: #fff;
+    font-weight: 600;
+}
+
+/* ---- Side tabs (原「篩選」「原始報告」紅色側標) -------------------------- */
+/*
+ * On desktop these stay as vertical tabs pinned to the left edge; on narrow
+ * screens they become ordinary buttons in the toolbar so they never overlap
+ * the content.
+ */
+
+.side-tabs {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.side-tab {
+    background-color: #c0392b;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.side-tab:hover {
+    background-color: #a93226;
+}
+
+@media (min-width: 992px) {
+    .side-tabs {
+        position: fixed;
+        left: 0;
+        top: calc(var(--navbar-height) + 1.5rem);
+        z-index: 30;
+        flex-direction: column;
+    }
+
+    .side-tab {
+        writing-mode: vertical-rl;
+        border-radius: 0 6px 6px 0;
+        padding: 0.9rem 0.35rem;
+        letter-spacing: 0.15em;
+    }
+
+    /* Keep the pinned tabs from covering the first panel. */
+    .workspace--inset {
+        margin-left: 2.25rem;
+    }
+}
+
+/* ---- Drawer (filter / report overlay) ---------------------------------- */
+
+.drawer {
+    position: fixed;
+    top: var(--navbar-height);
+    bottom: 0;
+    width: min(22rem, 90vw);
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    background-image: url('../image/texture.png');
+    background-color: #fff;
+    box-shadow: var(--shadow);
+    transition: transform 0.2s ease;
+}
+
+.drawer--left {
+    left: 0;
+    transform: translateX(-102%);
+}
+
+.drawer--right {
+    right: 0;
+    /* Wide enough for the sensitivity panel without horizontal scrolling. */
+    width: min(34rem, 94vw);
+    transform: translateX(102%);
+}
+
+.drawer.is-open {
+    transform: translateX(0);
+}
+
+.drawer__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+    font-weight: 600;
+}
+
+.drawer__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.75rem;
+}
+
+.drawer__close {
+    border: none;
+    background: none;
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+/* ---- Misc --------------------------------------------------------------- */
+
+.empty-state {
+    padding: 1.5rem 0.75rem;
+    text-align: center;
+    color: #777;
+    font-size: 0.9rem;
+}
+
+.panel--navy .empty-state {
+    color: #c8d2de;
+}
+
+.stat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.stat {
+    flex: 1 1 6rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.stat__label {
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.stat__value {
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.is-busy {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.report-block {
+    white-space: pre-wrap;
+    font-size: 0.86rem;
+    line-height: 1.6;
+    padding: 0.6rem;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 0.6rem;
+}
+
+.report-block__meta {
+    font-size: 0.78rem;
+    color: #666;
+    margin-bottom: 0.35rem;
+}
+
+/* ---- Lab report ---------------------------------------------------------- */
+/*
+ * Laid out like the printed microbiology report: a plain header block, then
+ * one tinted panel per isolate with its sensitivity list.
+ */
+
+.lab-report {
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 6px;
+    background-color: #fff;
+    margin-bottom: 0.85rem;
+    overflow: hidden;
+}
+
+.lab-report__head {
+    padding: 0.6rem 0.7rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+    font-size: 0.83rem;
+    line-height: 1.7;
+}
+
+.lab-report__title {
+    font-weight: 700;
+    font-size: 0.92rem;
+    margin-bottom: 0.2rem;
+}
+
+.lab-report__line {
+    display: flex;
+    gap: 0.2rem;
+    flex-wrap: wrap;
+}
+
+.lab-report__label { color: #555; }
+.lab-report__value { font-weight: 600; word-break: break-word; }
+
+.lab-report__no {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: #888;
+}
+
+.isolate__caption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.7rem 0.3rem;
+    font-size: 0.85rem;
+}
+
+.badge-commensal {
+    padding: 0.05rem 0.4rem;
+    border-radius: 3px;
+    background-color: #f0d5d7;
+    color: #8d2b34;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+/* The isolate panel is tinted so each organism reads as one unit. */
+.isolate {
+    margin: 0 0.7rem 0.7rem;
+    border: 1px solid #cfe0d2;
+    border-radius: 4px;
+    background-color: #eaf3ec;
+    overflow: hidden;
+}
+
+.isolate__summary {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.4rem;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.83rem;
+    font-weight: 600;
+    border-bottom: 1px solid #cfe0d2;
+}
+
+.isolate__count { font-weight: 400; color: #4a6b52; }
+
+.isolate__empty {
+    padding: 0.6rem;
+    font-size: 0.82rem;
+    color: #666;
+}
+
+.sens-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.sens-table td {
+    padding: 0.25rem 0.6rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    vertical-align: middle;
+}
+
+.sens-table tr:last-child td { border-bottom: none; }
+
+/* Result first, then MIC, then the drug name — the order the lab prints. */
+.sens-cell { width: 2.6rem; }
+.mic-cell { width: 4rem; color: #4a5a4d; }
+.drug-cell { text-align: right; }
+
+/* S / I / R carry a letter as well as a colour, so the meaning never depends
+   on colour alone. */
+.sens {
+    display: inline-block;
+    min-width: 1.4rem;
+    padding: 0 0.3rem;
+    border-radius: 3px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.sens--S { background-color: #cfe8d2; color: #1c6b25; }
+.sens--I { background-color: #f7e6bd; color: #8a6100; }
+.sens--R { background-color: #f3ccd0; color: #a4252f; }
+
+.lab-report__comment {
+    padding: 0.55rem 0.7rem;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+    background-color: #fbfbfb;
+    color: #444;
+}
+
+/* ---- Narrative note ------------------------------------------------------ */
+
+.note-block {
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    background-color: #fff;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+}
+
+.note-block__title {
+    padding: 0.45rem 0.7rem;
+    background-color: #5a6b7d;
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.35rem;
+}
+
+.note-block__body {
+    padding: 0.65rem 0.7rem;
+    font-size: 0.87rem;
+    line-height: 1.9;
+    white-space: pre-wrap;
+}
+
+/* Vital-sign figures called out inside the narrative, as the ward notes do. */
+.vital-mark {
+    padding: 0 0.25rem;
+    border-radius: 3px;
+    font-weight: 700;
+    background-color: #e7f1ff;
+    color: #0b4a8f;
+}
+
+.vital-mark--high {
+    background-color: #ffe1e1;
+    color: #a4252f;
+}
+
+/* ---- Inline icons -------------------------------------------------------- */
+
+.cell-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+}
+
+/* Every inline marker is capped here as well as on the <svg> element itself,
+   so a stale stylesheet can never render one at block size. */
+.cell-icon svg,
+.icon-bacteria svg,
+.icon-bacteria--commensal svg,
+.icon-fever svg {
+    flex: 0 0 auto;
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.13em;
+}
+
+.icon-bacteria,
+.icon-bacteria--commensal,
+.icon-fever {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+}
+
+.icon-bacteria { color: #2e7d32; }
+.icon-bacteria--commensal { color: #9e9e9e; }
+.icon-fever { color: #d84315; }
+
+/* ---- Read-only notice ---------------------------------------------------- */
+
+.readonly-note {
+    flex: 0 0 auto;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid #e0cfa0;
+    border-left: 4px solid #c9a227;
+    border-radius: 5px;
+    background-color: #fdf8e8;
+    color: #5c4a10;
+    font-size: 0.83rem;
+}
+
+/* Disabled editing controls: clearly inert, not merely faded. */
+.is-readonly,
+.is-readonly:hover {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ---- Vital-sign chart ---------------------------------------------------- */
+/*
+ * The patient's consolidated observations.  Out-of-range readings are filled
+ * rather than tinted so they read at a glance down a long column; each also
+ * carries a title attribute naming the direction, so the mark is not conveyed
+ * by colour alone.
+ */
+
+.vital-chart {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    background-color: #fff;
+}
+
+.vital-chart th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 0.4rem 0.5rem;
+    background-color: #f2f2ee;
+    border-bottom: 2px solid #333;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.vital-chart__unit {
+    font-weight: 400;
+    font-size: 0.7rem;
+    color: #6d6d68;
+}
+
+.vital-chart td {
+    padding: 0.35rem 0.5rem;
+    text-align: center;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* Banded rows, as the reference chart does, to track a row across columns. */
+.vital-chart tbody tr:nth-child(odd) {
+    background-color: #ececea;
+}
+
+.vital-chart__time {
+    text-align: left !important;
+    color: #55555a;
+    font-size: 0.74rem;
+}
+
+.vital-chart__cell.is-high {
+    background-color: #ef7a7a;
+    color: #3d0d0d;
+    font-weight: 700;
+}
+
+.vital-chart__cell.is-low {
+    background-color: #6cb2ea;
+    color: #0c2c46;
+    font-weight: 700;
+}
+
+/* ---- Raw report (source text) ------------------------------------------- */
+/*
+ * The report as the source system emits it.  Rendered in a monospace <pre> so
+ * the original column alignment survives, which is the point of showing it —
+ * a reviewer checks the parsed view on the right against this.
+ */
+
+.raw-report {
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 5px;
+    background-color: #1e2632;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+}
+
+.raw-report__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background-color: #2b3646;
+    color: #e8edf4;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.raw-report__no {
+    font-weight: 400;
+    opacity: 0.75;
+}
+
+.raw-report__body {
+    margin: 0;
+    padding: 0.6rem;
+    /* Horizontal scroll rather than wrapping: wrapped lines would destroy the
+       fixed-width columns the source text relies on. */
+    overflow-x: auto;
+    white-space: pre;
+    font-family: Consolas, 'Courier New', ui-monospace, monospace;
+    font-size: 0.72rem;
+    line-height: 1.55;
+    color: #d8e0ea;
+    tab-size: 4;
+}
+
+/* ---- Patient chip -------------------------------------------------------- */
+
+.patient-chip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.5rem;
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+}
+
+.patient-chip__meta {
+    font-size: 0.78rem;
+    color: #6b7580;
+    font-weight: 400;
+}
+
+/* ---- Event feed (timeline) ---------------------------------------------- */
+/*
+ * A vertical feed rather than a wide table: the original reference coloured
+ * every row by category, which made the abnormal entries hard to pick out.
+ * Here the category is a thin left-edge accent and strong colour is reserved
+ * for something clinically notable.
+ */
+
+.event-feed {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.event {
+    padding: 0.5rem 0.7rem;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #b9c2cc;
+    border-radius: 5px;
+    background-color: rgba(255, 255, 255, 0.95);
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.event:hover,
+.event:focus-visible {
+    border-color: rgba(0, 0, 0, 0.25);
+    border-left-color: var(--accent);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    outline: none;
+}
+
+/* One muted accent per category. */
+.ev--admission { border-left-color: #6b8cae; }
+.ev--nursing   { border-left-color: #a8b0b8; }
+.ev--tube      { border-left-color: #4f9a94; }
+.ev--vital     { border-left-color: #c98f4b; }
+
+/* Reserved for entries that need attention. */
+.event.is-abnormal {
+    border-left-color: #c0392b;
+    background-color: #fdf6f5;
+}
+
+.event__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.3rem 0.6rem;
+}
+
+.event__time {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.8rem;
+    color: #5a6570;
+}
+
+.event__type {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.event__where {
+    font-size: 0.78rem;
+    color: #77828c;
+}
+
+.event__reports {
+    margin-left: auto;
+    font-size: 0.72rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 3px;
+    background-color: #e8ecf0;
+    color: #4a5560;
+    white-space: nowrap;
+}
+
+.event__organism {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.3rem;
+    font-size: 0.83rem;
+    color: #26562c;
+}
+
+/*
+ * Vital signs as a compact inline grid.
+ *
+ * The four readings are one set and are read together, so the column count is
+ * fixed at four rather than left to `auto-fit` — which dropped SPO2 onto a
+ * second row as soon as the panel was a little narrow.  They drop to two rows
+ * of two only on genuinely small screens.
+ */
+.vitals {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.25rem 0.5rem;
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+    border-top: 1px dashed rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 575.98px) {
+    .vitals {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.vital {
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    min-width: 0;
+}
+
+.vital__label {
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    color: #8a939c;
+}
+
+.vital__value {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+    /* Keep "78 次/分" on one line — a wrapped unit reads as a second reading. */
+    white-space: nowrap;
+}
+
+.vital--abnormal .vital__value {
+    color: #a4252f;
+    font-weight: 700;
+}
