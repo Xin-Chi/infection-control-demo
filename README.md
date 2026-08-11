@@ -30,6 +30,8 @@ python manage.py runserver
 
 開啟 <http://127.0.0.1:8000/>，**不需要登入**即可瀏覽。
 
+部署到公開網址的完整步驟見 **[DEPLOY.md](DEPLOY.md)**。
+
 ### 兩種執行模式
 
 由 `DJANGO_DEMO_MODE` 環境變數切換（預設開啟）。

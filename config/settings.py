@@ -99,6 +99,11 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serves everything under STATIC_ROOT.  Django only serves static files
+    # itself while DEBUG is on, so without this a deployed site renders every
+    # page unstyled.  Keeping it in the app rather than relying on the host's
+    # static-file mapping means the same build works on any host.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -164,7 +169,24 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+# `collectstatic` gathers everything here; WhiteNoise serves from it.
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        # Compresses collected files and gives each a content-hashed name, so
+        # they can be cached indefinitely and a changed file always gets a new
+        # URL.  Only used off DEBUG — the dev server serves the plain files.
+        'BACKEND': (
+            'whitenoise.storage.CompressedManifestStaticFilesStorage'
+            if not DEBUG
+            else 'django.contrib.staticfiles.storage.StaticFilesStorage'
+        ),
+    },
+}
 
 
 # -- Security ---------------------------------------------------------------

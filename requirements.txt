@@ -1,1 +1,5 @@
 Django>=4.2,<5.0
+
+# Serves static files from STATIC_ROOT.  Required in any deployment, since
+# Django only serves them itself while DEBUG is on.
+whitenoise>=6.0
