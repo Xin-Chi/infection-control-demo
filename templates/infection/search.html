@@ -12,19 +12,32 @@ overlapped as soon as the window changed size.
 Shown on every visit to this page, before any record is displayed.  Uses
 Bootstrap's modal with a static backdrop so it cannot be dismissed by clicking
 away or pressing Esc — acknowledging it is the point.
+
+It also carries the one-paragraph description of what the system does, because
+this page is the link that gets shared: a visitor who lands here directly must
+not have to work out what they are looking at, and cannot be relied upon to go
+back to the home page for context.
 {% endcomment %}
 <div class="modal fade" id="demoNotice" tabindex="-1" data-bs-backdrop="static"
      data-bs-keyboard="false" aria-labelledby="demoNoticeTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="modal-title h5" id="demoNoticeTitle">示範資料聲明</h2>
+                <h2 class="modal-title h5" id="demoNoticeTitle">
+                    感染管控收案系統 — 示範版
+                </h2>
             </div>
             <div class="modal-body">
                 <p class="mb-2">
-                    本站為<strong>介面展示用的示範網站</strong>，站內顯示的所有資料
-                    ——包含病患姓名、病歷號、病房、菌種、檢驗報告、護理紀錄與生命徵象——
-                    皆由程式自動產生的<strong>虛構資料</strong>。
+                    本頁依<strong>病房、科別、菌種與日期區間</strong>篩選收案對象，
+                    以時間軸檢視個案的住院、護理紀錄、導管留置與異常生理評值，
+                    並可展開該筆的<strong>微生物培養報告</strong>（含抗生素敏感性測試）
+                    或<strong>護理紀錄原文</strong>，右側同時提供該病患統整後的生命徵象。
+                </p>
+                <hr class="my-2">
+                <p class="mb-2">
+                    站內顯示的所有資料——包含病患姓名、病歷號、病房、菌種、檢驗報告、
+                    護理紀錄與生命徵象——皆由程式自動產生的<strong>虛構資料</strong>。
                 </p>
                 <ul class="small mb-2">
                     <li>不含任何真實病患資料，亦無任何個人資料。</li>
@@ -37,7 +50,7 @@ away or pressing Esc — acknowledging it is the point.
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-dark" id="demoNoticeConfirm">
-                    我已了解，繼續瀏覽
+                    我已了解，開始瀏覽
                 </button>
             </div>
         </div>
